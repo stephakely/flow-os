@@ -212,6 +212,20 @@ export const api = {
       callback(msgs);
     });
   },
+
+  subscribeTeam: (callback) => {
+    return onSnapshot(collection(db, 'team'), (snapshot) => {
+      const team = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(team);
+    });
+  },
+
+  subscribeClients: (callback) => {
+    return onSnapshot(collection(db, 'clients'), (snapshot) => {
+      const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(clients);
+    });
+  },
   
   sendMessage: async (message) => {
     await addDoc(collection(db, 'chatMessages'), {

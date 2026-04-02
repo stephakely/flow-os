@@ -37,12 +37,17 @@ export default function PinLogin({ email, onLogin, onBack }) {
     
     // Si targetUser est une liste (cas multi-rôles) ou un objet unique (cas normal/fallback)
     const usersToTry = Array.isArray(targetUser) ? targetUser : [targetUser];
+    
+    // On cherche un match exact entre le PIN tapé et l'un des profilsFirestore
     const authenticatedUser = usersToTry.find(u => u.pin === pin);
 
     if (authenticatedUser) {
+      // ✅ SUCCÈS : Le PIN correspond à un profil Firestore pour cet email.
+      // On connecte l'utilisateur avec ce rôle précis.
       onLogin(authenticatedUser);
     } else {
-      setError('PIN INVALIDE');
+      // ❌ ÉCHEC : Aucun profil pour cet email n'utilise ce PIN.
+      setError('CODE PIN INVALIDE');
       setPin('');
     }
   };

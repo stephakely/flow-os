@@ -14,16 +14,15 @@ export default function AccessControl({ user }) {
   const [contractType, setContractType] = useState('per_video');
 
   useEffect(() => {
-    loadUsers();
-    const handleDbUpdate = () => loadUsers();
-    window.addEventListener('flow-db-update', handleDbUpdate);
-    return () => window.removeEventListener('flow-db-update', handleDbUpdate);
-  }, []);
+    // Real-time subscriptions for instant UI updates
+    const unsubTeam = api.subscribeTeam((data) => setTeam(data));
+    const unsubClients = api.subscribeClients((data) => setClients(data));
 
-  const loadUsers = async () => {
-    setTeam(await api.getTeam());
-    setClients(await api.getClients());
-  };
+    return () => {
+      unsubTeam();
+      unsubClients();
+    };
+  }, []);
 
   const generatePin = () => {
     const pin = Math.floor(1000 + Math.random() * 9000).toString();
@@ -73,7 +72,7 @@ export default function AccessControl({ user }) {
     setGeneratedPin('');
     setContractType('per_video');
     alert(`✅ Accès créé pour ${newName} (${newRole}) – PIN: ${generatedPin}`);
-    loadUsers();
+    // No need to call loadUsers(), subscription handles it!
   };
 
   const handleDeleteTeamMember = async (member) => {
@@ -84,8 +83,7 @@ export default function AccessControl({ user }) {
     if (confirm(`Révoquer l'accès définitif de ${member.name} ?`)) {
       try {
         await api.deleteTeamMember(member.id);
-        // On attend un court délai pour laisser Firestore se mettre à jour
-        setTimeout(loadUsers, 500);
+        // Instant refresh via subscription
       } catch (err) {
         alert("Erreur lors de la suppression.");
       }
@@ -96,7 +94,7 @@ export default function AccessControl({ user }) {
     if (confirm(`Révoquer l'accès client de ${client.name} ?`)) {
       try {
         await api.deleteClient(client.id);
-        setTimeout(loadUsers, 500);
+        // Instant refresh via subscription
       } catch (err) {
         alert("Erreur lors de la suppression.");
       }
