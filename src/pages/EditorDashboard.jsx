@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, computeNetNet } from '../lib/apiService';
-import { CheckCircle, Circle, Euro, Film, TrendingUp, Calendar } from 'lucide-react';
+import { CheckCircle, Circle, Euro, Film, TrendingUp, Calendar, RefreshCw } from 'lucide-react';
 
 export default function EditorDashboard({ user }) {
   const [projects, setProjects] = useState([]);
@@ -30,6 +30,15 @@ export default function EditorDashboard({ user }) {
     const updatedProject = { ...project, subtasks: updatedSubtasks };
     await api.saveProject(updatedProject);
     loadData();
+  };
+
+  const resetAllSubtasks = async (project) => {
+    if(confirm("Réinitialiser toutes les tâches de ce projet ?")) {
+      const updatedSubtasks = project.subtasks.map(t => ({ ...t, done: false }));
+      const updatedProject = { ...project, subtasks: updatedSubtasks };
+      await api.saveProject(updatedProject);
+      loadData();
+    }
   };
 
   // Calcul des revenus par mois
@@ -146,7 +155,15 @@ export default function EditorDashboard({ user }) {
                   </div>
 
                   <div className="space-y-2">
-                    <h4 className="text-sm font-bold text-cyber-neon/80 uppercase tracking-widest border-b border-cyber-border/40 pb-2">Sous-tâches</h4>
+                    <div className="flex justify-between items-center border-b border-cyber-border/40 pb-2">
+                       <h4 className="text-sm font-bold text-cyber-neon/80 uppercase tracking-widest">Sous-tâches</h4>
+                       <button 
+                        onClick={() => resetAllSubtasks(project)}
+                        className="text-[10px] text-cyber-muted hover:text-cyber-neon uppercase tracking-tighter flex items-center gap-1 opacity-50 hover:opacity-100"
+                      >
+                        <RefreshCw size={10} /> Reset
+                      </button>
+                    </div>
                     {project.subtasks?.map(task => (
                       <div 
                         key={task.id} 

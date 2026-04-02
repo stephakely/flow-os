@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/apiService';
-import { Play, Square, Clock, AlertTriangle, ShieldAlert, X, Plus, CheckCircle, Circle, Trash2, DollarSign } from 'lucide-react';
+import { Play, Square, Clock, AlertTriangle, ShieldAlert, X, Plus, CheckCircle, Circle, Trash2, DollarSign, RefreshCw } from 'lucide-react';
 
-// Composant Timer inline
+// Composant Timer amélioré avec persistance Firestore
 const TimerBlock = ({ project, onUpdate }) => {
   const [isRunning, setIsRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(project.totalTime || 0);
   
   useEffect(() => {
     let interval;
@@ -17,8 +17,24 @@ const TimerBlock = ({ project, onUpdate }) => {
     return () => clearInterval(interval);
   }, [isRunning]);
 
+  // Sauvegarder le temps à l'arrêt du chrono
+  useEffect(() => {
+    if (!isRunning && elapsed !== project.totalTime) {
+      api.saveProject({ ...project, totalTime: elapsed });
+    }
+  }, [isRunning]);
+
   const toggleTimer = () => {
     setIsRunning(!isRunning);
+  };
+
+  const resetTimer = async () => {
+    if(confirm("Réinitialiser le chrono à zéro ?")) {
+      setElapsed(0);
+      setIsRunning(false);
+      await api.saveProject({ ...project, totalTime: 0 });
+      onUpdate();
+    }
   };
 
   const formatTime = (secs) => {
@@ -32,12 +48,21 @@ const TimerBlock = ({ project, onUpdate }) => {
     <div className="flex items-center gap-3 bg-black/40 p-2 rounded-lg border border-cyber-border/30">
       <Clock size={16} className="text-cyber-neon" />
       <span className="font-mono text-lg font-bold">{formatTime(elapsed)}</span>
-      <button 
-        onClick={toggleTimer} 
-        className={`p-2 rounded-lg ${isRunning ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}
-      >
-        {isRunning ? <Square size={16} /> : <Play size={16} />}
-      </button>
+      <div className="flex gap-1">
+        <button 
+          onClick={toggleTimer} 
+          className={`p-2 rounded-lg ${isRunning ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}
+        >
+          {isRunning ? <Square size={16} /> : <Play size={16} />}
+        </button>
+        <button 
+          onClick={resetTimer}
+          className="p-2 rounded-lg bg-gray-500/20 text-gray-400 hover:text-white"
+          title="Reset Chrono"
+        >
+          <RefreshCw size={16} />
+        </button>
+      </div>
     </div>
   );
 };
@@ -120,6 +145,14 @@ export default function Production({ user }) {
     const newStatus = project.payment_status === 'PAYÉ' ? 'EN ATTENTE' : 'PAYÉ';
     await api.saveProject({ ...project, payment_status: newStatus });
     loadData();
+  };
+
+  const resetAllSubtasks = async (project) => {
+    if(confirm("Réinitialiser toutes les tâches du projet ?")) {
+      const updatedSubtasks = project.subtasks.map(t => ({ ...t, done: false }));
+      await api.saveProject({ ...project, subtasks: updatedSubtasks });
+      loadData();
+    }
   };
 
   // Créer un Projet
@@ -217,7 +250,15 @@ export default function Production({ user }) {
               <ProgressBar subtasks={p.subtasks} />
 
               <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-cyber-muted uppercase tracking-wider">Sous-tâches</h4>
+                <div className="flex justify-between items-center mb-1">
+                  <h4 className="text-sm font-semibold text-cyber-muted uppercase tracking-wider">Sous-tâches</h4>
+                  <button 
+                    onClick={() => resetAllSubtasks(p)}
+                    className="text-[10px] text-cyber-muted hover:text-cyber-neon uppercase tracking-tighter flex items-center gap-1 opacity-50 hover:opacity-100"
+                  >
+                    <RefreshCw size={10} /> Reset
+                  </button>
+                </div>
                 {p.subtasks?.map(t => (
                   <div
                     key={t.id}

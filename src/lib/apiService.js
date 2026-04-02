@@ -1,17 +1,29 @@
 // src/lib/apiService.js
-// Cerveau de FLOW_OS - Gère les données locales, backups et logiques métier.
-// Prêt pour une migration vers Firebase/Supabase avec architecture asynchrone factice.
+// Cerveau de FLOW_OS - Migration Firestore pour collaboration temps réel.
+import { 
+  collection, 
+  getDocs, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  query, 
+  where,
+  addDoc
+} from "firebase/firestore";
+import { db } from "./firebase";
 
-const STORAGE_KEY = 'flow_os_db';
+// --- Configuration Initiale (Seeding) ---
 
 const initialData = {
   settings: {
     studioName: 'FLOW_OS STUDIOS',
-    currency: '€',
+    currency: 'EUR',
     monthlyResetDate: null
   },
   clients: [
-    { id: 'C1', name: 'CyberCorp', currency: '€', email: 'contact@cybercorp.com', pin: '1111', role: 'client' }
+    { id: 'C1', name: 'CyberCorp', currency: 'EUR', email: 'contact@cybercorp.com', pin: '1111', role: 'client' }
   ],
   team: [
     { id: 'T1', name: 'Monteur Alpha', email: 'alpha@flowos.com', pin: '0000', role: 'editor', totalEarned: 0 },
@@ -23,8 +35,8 @@ const initialData = {
       title: 'Promo Cyberpunk 2077', 
       clientId: 'C1', 
       assigneeId: 'T1', 
-      price: 1500, // Prix client TTC
-      currency: '€',
+      price: 1500,
+      currency: 'EUR',
       priority: 'URGENCE', 
       payment_status: 'EN ATTENTE', 
       link_rushes: 'http://gdrive.link/rush', 
@@ -35,7 +47,7 @@ const initialData = {
         { id: 't2', title: 'Montage Cut', done: false },
         { id: 't3', title: 'Color Grading', done: false }
       ],
-      timeLogs: [] // Sessions de chronomètre : { isRunning, start, end, duration }
+      timeLogs: []
     }
   ],
   archives: [],
@@ -45,36 +57,55 @@ const initialData = {
   chatMessages: []
 };
 
-// --- DAL (Data Access Layer) ---
+// --- DAL (Data Access Layer) Firestore ---
+
+const getCollection = async (collName) => {
+  if (!db) return [];
+  try {
+    const snapshot = await getDocs(collection(db, collName));
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Seeding automatique si la liste d'équipe est vide
+    if (collName === 'team' && data.length === 0) {
+        console.log("Seeding initial data to Firestore...");
+        for (const member of initialData.team) {
+            const { id, ...rest } = member;
+            await setDoc(doc(db, 'team', id), rest);
+        }
+        return initialData.team;
+    }
+    return data;
+  } catch (e) {
+    console.error(`Erreur lors de la lecture de la collection ${collName}:`, e);
+    return [];
+  }
+};
 
 export const getDB = async () => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
-    return initialData;
-  }
-  const parsed = JSON.parse(data);
-  return { ...initialData, ...parsed };
+    // getDB est maintenu pour la compatibilité avec l'initialisation App.jsx
+    const projects = await getCollection('projects');
+    const team = await getCollection('team');
+    const clients = await getCollection('clients');
+    const archives = await getCollection('archives');
+    const crmLeads = await getCollection('crmLeads');
+    
+    let settings = initialData.settings;
+    try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'main'));
+        if (settingsDoc.exists()) settings = settingsDoc.data();
+    } catch (e) {}
+    
+    return { projects, team, clients, archives, crmLeads, settings };
 };
 
-export const saveDB = async (db) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  // Notifier les listeners si on veut du multi-onglets
-  window.dispatchEvent(new Event('flow-db-update'));
-};
-
-// --- Fonctionnalités Métier ---
+// --- Logiques Métier ---
 
 export const computeNetNet = (price, feePct, isTeamCalculation = false) => {
-  // Calcul du prix net : Prix - Frais Plateforme
   const netPlatform = price - (price * (feePct / 100));
-  
   if (isTeamCalculation) {
-    // La remarque utilisateur stipule : Team : rentabilité calcule sans TVA 20%
     const netWithoutVat = netPlatform / 1.20;
     return netWithoutVat;
   }
-  
   return netPlatform;
 };
 
@@ -83,125 +114,98 @@ export const formatAmount = (amount, currency = 'EUR') => {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: safeCurrency }).format(amount || 0);
 };
 
-export const exportBackup = async () => {
-  const db = await getDB();
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
-  const dlAnchorElem = document.createElement('a');
-  dlAnchorElem.setAttribute("href", dataStr);
-  dlAnchorElem.setAttribute("download", `flow_os_backup_${new Date().toISOString().split('T')[0]}.json`);
-  dlAnchorElem.click();
-};
+// --- API Service Firestore ---
 
-export const importBackup = async (jsonString) => {
-  try {
-    const data = JSON.parse(jsonString);
-    if (data && data.settings && data.projects) {
-      await saveDB(data);
-      return true;
-    }
-    return false;
-  } catch(e) {
-    console.error("Format invalide", e);
-    return false;
-  }
-};
-
-// Utilitaires de simulation de requêtes
 export const api = {
-  getProjects: async () => (await getDB()).projects || [],
-  saveProject: async (project) => {
-    const db = await getDB();
-    if (!db.projects) db.projects = [];
-    const idx = db.projects.findIndex(p => p.id === project.id);
-    if(idx >= 0) db.projects[idx] = project;
-    else db.projects.push(project);
-    await saveDB(db);
-  },
-  deleteProject: async (id) => {
-    const db = await getDB();
-    if (!db.projects) db.projects = [];
-    db.projects = db.projects.filter(p => p.id !== id);
-    await saveDB(db);
-  },
-  archiveProject: async (project) => {
-    const db = await getDB();
-    if (!db.projects) db.projects = [];
-    if (!db.archives) db.archives = [];
-    db.projects = db.projects.filter(p => p.id !== project.id);
-    db.archives.push({...project, archivedAt: new Date().toISOString()});
-    // On peut appliquer les gains au team member ici aussi
-    if(project.payment_status === 'PAYÉ') {
-       if (!db.team) db.team = [];
-       const userIdx = db.team.findIndex(t => t.id === project.assigneeId);
-       if(userIdx >= 0) {
-         // Ajout aux gains, sans la TVA
-         db.team[userIdx].totalEarned = (db.team[userIdx].totalEarned || 0) + computeNetNet(project.price, project.platform_fee_pct, true);
-       }
-    }
-    await saveDB(db);
-  },
+  getProjects: async () => await getCollection('projects'),
   
-  // CRM, Team, Clients, Settings : Helpers génériques...
-  getClients: async () => (await getDB()).clients || [],
-  getTeam: async () => (await getDB()).team || [],
-  getArchives: async () => (await getDB()).archives || [],
-  getCRMLeads: async () => (await getDB()).crmLeads || [],
-  getSettings: async () => (await getDB()).settings || {},
+  saveProject: async (project) => {
+    const { id, ...data } = project;
+    await setDoc(doc(db, 'projects', id), data);
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  deleteProject: async (id) => {
+    await deleteDoc(doc(db, 'projects', id));
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  archiveProject: async (project) => {
+    const { id, ...data } = project;
+    await deleteDoc(doc(db, 'projects', id));
+    await setDoc(doc(db, 'archives', id), {
+        ...data,
+        archivedAt: new Date().toISOString()
+    });
+    
+    if (project.payment_status === 'PAYÉ') {
+        const teamDoc = await getDoc(doc(db, 'team', project.assigneeId));
+        if (teamDoc.exists()) {
+            const currentEarned = teamDoc.data().totalEarned || 0;
+            const gain = computeNetNet(project.price, project.platform_fee_pct, true);
+            await updateDoc(doc(db, 'team', project.assigneeId), {
+                totalEarned: currentEarned + gain
+            });
+        }
+    }
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  getClients: async () => await getCollection('clients'),
+  getTeam: async () => await getCollection('team'),
+  getArchives: async () => await getCollection('archives'),
+  getCRMLeads: async () => await getCollection('crmLeads'),
+  
+  getSettings: async () => {
+    const sDoc = await getDoc(doc(db, 'settings', 'main'));
+    return sDoc.exists() ? sDoc.data() : initialData.settings;
+  },
+
   updateCRMLead: async (lead) => {
-     const db = await getDB();
-     const idx = db.crmLeads.findIndex(l => l.id === lead.id);
-     if(idx >= 0) db.crmLeads[idx] = lead;
-     else db.crmLeads.push(lead);
-     await saveDB(db);
+    const { id, ...data } = lead;
+    await setDoc(doc(db, 'crmLeads', id), data);
+    window.dispatchEvent(new Event('flow-db-update'));
   },
+
   updateTeam: async (member) => {
-     const db = await getDB();
-     const idx = db.team.findIndex(t => t.id === member.id);
-     if(idx >= 0) db.team[idx] = member;
-     else db.team.push(member);
-     await saveDB(db);
+    const { id, ...data } = member;
+    await setDoc(doc(db, 'team', id), data);
+    window.dispatchEvent(new Event('flow-db-update'));
   },
+
   addClient: async (client) => {
-     const db = await getDB();
-     if(!db.clients) db.clients = [];
-     const idx = db.clients.findIndex(c => c.id === client.id);
-     if(idx >= 0) db.clients[idx] = client;
-     else db.clients.push(client);
-     await saveDB(db);
+    const { id, ...data } = client;
+    await setDoc(doc(db, 'clients', id), data);
+    window.dispatchEvent(new Event('flow-db-update'));
   },
+
   deleteCRMLead: async (id) => {
-     const db = await getDB();
-     if (!db.crmLeads) db.crmLeads = [];
-     db.crmLeads = db.crmLeads.filter(l => l.id !== id);
-     await saveDB(db);
+    await deleteDoc(doc(db, 'crmLeads', id));
+    window.dispatchEvent(new Event('flow-db-update'));
   },
+
   deleteTeamMember: async (id) => {
-     const db = await getDB();
-     if (!db.team) db.team = [];
-     db.team = db.team.filter(t => t.id !== id);
-     await saveDB(db);
+    await deleteDoc(doc(db, 'team', id));
+    window.dispatchEvent(new Event('flow-db-update'));
   },
+
   deleteClient: async (id) => {
-     const db = await getDB();
-     if (!db.clients) db.clients = [];
-     db.clients = db.clients.filter(c => c.id !== id);
-     await saveDB(db);
+    await deleteDoc(doc(db, 'clients', id));
+    window.dispatchEvent(new Event('flow-db-update'));
   },
+
   updateSettings: async (settings) => {
-     const db = await getDB();
-     db.settings = { ...db.settings, ...settings };
-     await saveDB(db);
+    await setDoc(doc(db, 'settings', 'main'), settings);
+    window.dispatchEvent(new Event('flow-db-update'));
   },
-  getMessages: async () => {
-     const db = await getDB();
-     return db.chatMessages || [];
-  },
+
+  getMessages: async () => await getCollection('chatMessages'),
+  
   sendMessage: async (message) => {
-     const db = await getDB();
-     if (!db.chatMessages) db.chatMessages = [];
-     db.chatMessages.push(message);
-     // Garder les 200 derniers messages max
-     if (db.chatMessages.length > 200) db.chatMessages = db.chatMessages.slice(-200);
-     await saveDB(db);
+    await addDoc(collection(db, 'chatMessages'), {
+        ...message,
+        timestamp: new Date().toISOString()
+    });
+    window.dispatchEvent(new Event('flow-db-update'));
   }
 };
