@@ -10,7 +10,8 @@ import {
   doc, 
   query, 
   where,
-  addDoc
+  onSnapshot,
+  orderBy
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -200,6 +201,14 @@ export const api = {
   },
 
   getMessages: async () => await getCollection('chatMessages'),
+  
+  subscribeMessages: (callback) => {
+    const q = query(collection(db, 'chatMessages'), orderBy('timestamp', 'asc'));
+    return onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(msgs);
+    });
+  },
   
   sendMessage: async (message) => {
     await addDoc(collection(db, 'chatMessages'), {

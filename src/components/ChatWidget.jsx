@@ -11,15 +11,12 @@ export default function ChatWidget({ user }) {
   const lastCountRef = useRef(0);
 
   useEffect(() => {
-    loadMessages();
-    // Polling toutes les 3 secondes pour simuler le temps réel
-    const interval = setInterval(loadMessages, 3000);
-    const handleDbUpdate = () => loadMessages();
-    window.addEventListener('flow-db-update', handleDbUpdate);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('flow-db-update', handleDbUpdate);
-    };
+    // True real-time subscription via Firestore
+    const unsubscribe = api.subscribeMessages((msgs) => {
+      setMessages(msgs);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {

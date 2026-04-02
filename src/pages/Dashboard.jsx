@@ -11,6 +11,9 @@ export default function Dashboard({ user }) {
 
   useEffect(() => {
     loadData();
+    // Refresh data when Firestore updates
+    window.addEventListener('flow-db-update', loadData);
+    return () => window.removeEventListener('flow-db-update', loadData);
   }, []);
 
   const loadData = async () => {
@@ -61,10 +64,10 @@ export default function Dashboard({ user }) {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Widget title="Total Revenue" value={formatAmount(stats.revenue)} icon={DollarSign} colorClass="text-cyber-neon" />
-        <Widget title="Active Projects" value={stats.projects} icon={Activity} colorClass="text-purple-400" />
-        <Widget title="CRM Pipeline" value={formatAmount(stats.crmValue)} icon={Star} colorClass="text-yellow-400" />
-        <Widget title="Production Avg" value="4.2 days" icon={Users} colorClass="text-green-400" />
+        <Widget title="Chiffre d'Affaires" value={formatAmount(stats.revenue)} icon={DollarSign} colorClass="text-cyber-neon" />
+        <Widget title="Projets en cours" value={stats.projects} icon={Activity} colorClass="text-purple-400" />
+        <Widget title="Valeur CRM" value={formatAmount(stats.crmValue)} icon={Star} colorClass="text-yellow-400" />
+        <Widget title="Rentabilité Moy." value="~84%" icon={Users} colorClass="text-green-400" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
