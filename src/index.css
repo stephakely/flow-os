@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cyber-dark text-cyber-text font-sans antialiased overflow-x-hidden;
+    background-image: 
+      radial-gradient(circle at 15% 50%, rgba(0, 242, 255, 0.03), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(0, 242, 255, 0.03), transparent 25%);
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-cyber-border rounded-full hover:bg-cyber-neon;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-cyber-card backdrop-blur-glass border border-cyber-border rounded-xl shadow-lg;
+  }
+  
+  .neon-input {
+    @apply w-full bg-gray-900/50 border border-cyber-border/50 text-cyber-text px-4 py-2 rounded-lg 
+    focus:outline-none focus:border-cyber-neon focus:shadow-neon transition-all duration-300 placeholder-cyber-muted;
+  }
+
+  .neon-button {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-300 transform active:scale-95;
+  }
+  .neon-button-primary {
+    @apply neon-button bg-cyber-neon/10 border border-cyber-neon text-cyber-neon hover:shadow-neon-hover hover:bg-cyber-neon/20;
+  }
+  .neon-button-secondary {
+    @apply neon-button bg-gray-800/50 border border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white;
+  }
+  .neon-button-danger {
+    @apply neon-button bg-red-500/10 border border-red-500 text-red-500 hover:bg-red-500/20 hover:shadow-pulse;
+  }
+
+  /* Pulse UI for Emergency */
+  .emergency-pulse {
+    animation: pulse-border 2s infinite;
+  }
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Watermark text selection */
+::selection {
+  @apply bg-cyber-neon/30 text-white;
+}
