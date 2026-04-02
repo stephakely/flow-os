@@ -10,9 +10,10 @@ export default function PinLogin({ email, onLogin, onBack }) {
   useEffect(() => {
     Promise.all([api.getTeam(), api.getClients()]).then(([teamData, clientsData]) => {
       const allUsers = [...teamData, ...clientsData];
-      const found = allUsers.find(u => u.email === email);
-      if (found) {
-        setTargetUser(found);
+      const matches = allUsers.filter(u => u.email === email);
+      
+      if (matches.length > 0) {
+        setTargetUser(matches); // On stocke la liste des matches
       } else {
         // Demande de l'utilisateur : "PAGE ADMIN PAR DEFAUT" et "AUCUNE ADRESSE NON AUTORISÉ"
         // Si l'email n'est pas dans l'ERP, on le laisse passer comme Admin avec le PIN de base (ex: 4444)
@@ -31,8 +32,12 @@ export default function PinLogin({ email, onLogin, onBack }) {
     e.preventDefault();
     if (!targetUser) return;
     
-    if (targetUser.pin === pin) {
-      onLogin(targetUser);
+    // Si targetUser est une liste (cas multi-rôles) ou un objet unique (cas normal/fallback)
+    const usersToTry = Array.isArray(targetUser) ? targetUser : [targetUser];
+    const authenticatedUser = usersToTry.find(u => u.pin === pin);
+
+    if (authenticatedUser) {
+      onLogin(authenticatedUser);
     } else {
       setError('PIN INVALIDE');
       setPin('');

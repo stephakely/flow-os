@@ -41,6 +41,13 @@ export default function AccessControl({ user }) {
     e.preventDefault();
     if (!newEmail || !newName || !generatedPin) return;
 
+    // Vérification des doublons d'email
+    const existing = [...team, ...clients].find(u => u.email.toLowerCase() === newEmail.toLowerCase());
+    if (existing) {
+      alert(`⚠️ L'email ${newEmail} est déjà utilisé par ${existing.name} (${existing.role}). Veuillez supprimer l'ancien accès ou changer d'email.`);
+      return;
+    }
+
     const newUser = {
       id: `U_${Date.now()}`,
       name: newName,
