@@ -164,18 +164,21 @@ export const api = {
 
   updateCRMLead: async (lead) => {
     const { id, ...data } = lead;
+    if (data.email) data.email = data.email.trim().toLowerCase();
     await setDoc(doc(db, 'crmLeads', id), data);
     window.dispatchEvent(new Event('flow-db-update'));
   },
 
   updateTeam: async (member) => {
     const { id, ...data } = member;
+    if (data.email) data.email = data.email.trim().toLowerCase();
     await setDoc(doc(db, 'team', id), data);
     window.dispatchEvent(new Event('flow-db-update'));
   },
 
   addClient: async (client) => {
     const { id, ...data } = client;
+    if (data.email) data.email = data.email.trim().toLowerCase();
     await setDoc(doc(db, 'clients', id), data);
     window.dispatchEvent(new Event('flow-db-update'));
   },

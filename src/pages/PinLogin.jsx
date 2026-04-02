@@ -6,25 +6,28 @@ export default function PinLogin({ email, onLogin, onBack }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [targetUser, setTargetUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    setIsLoading(true);
     Promise.all([api.getTeam(), api.getClients()]).then(([teamData, clientsData]) => {
       const allUsers = [...teamData, ...clientsData];
-      const matches = allUsers.filter(u => u.email.toLowerCase() === email.toLowerCase());
+      const matches = allUsers.filter(u => u.email.toLowerCase() === email.trim().toLowerCase());
       
       if (matches.length > 0) {
-        setTargetUser(matches); // On stocke la liste des matches
+        setTargetUser(matches);
       } else {
-        // Demande de l'utilisateur : "PAGE ADMIN PAR DEFAUT" et "AUCUNE ADRESSE NON AUTORISÉ"
-        // Si l'email n'est pas dans l'ERP, on le laisse passer comme Admin avec le PIN de base (ex: 4444)
+        // Fallback admin si non trouvé dans la DB
         setTargetUser({
           id: `ADMIN_${Date.now()}`,
-          name: email.split('@')[0], // Pseudo dynamique par défaut
-          email: email.toLowerCase(),
+          name: email.split('@')[0],
+          email: email.trim().toLowerCase(),
           role: 'admin',
-          pin: '4444' // Le PIN maître de l'Admin
+          pin: '4444'
         });
       }
+    }).finally(() => {
+      setIsLoading(false);
     });
   }, [email]);
 
@@ -60,24 +63,30 @@ export default function PinLogin({ email, onLogin, onBack }) {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <input 
-              type="password"
-              pattern="[0-9]*"
-              inputMode="numeric"
-              maxLength={4}
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="ENTER PIN"
-              className="text-center text-3xl tracking-[1em] neon-input rounded-xl border-cyber-border py-4 bg-black/40 w-full"
-              autoFocus
-              disabled={!targetUser}
-            />
+            {isLoading ? (
+              <div className="py-4 text-cyber-neon animate-pulse font-mono tracking-widest text-sm bg-black/20 rounded-xl border border-cyber-border/30">
+                DÉCRYPTAGE DES ACCÈS...
+              </div>
+            ) : (
+              <input 
+                type="password"
+                pattern="[0-9]*"
+                inputMode="numeric"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="ENTER PIN"
+                className="text-center text-3xl tracking-[1em] neon-input rounded-xl border-cyber-border py-4 bg-black/40 w-full"
+                autoFocus
+                disabled={!targetUser}
+              />
+            )}
           </div>
           {error && <div className="text-cyber-pulse text-xs font-bold tracking-wider animate-pulse border border-cyber-pulse/30 p-2 rounded bg-cyber-pulse/10">{error}</div>}
           
           <button 
             type="submit"
-            disabled={!targetUser || pin.length < 4}
+            disabled={isLoading || !targetUser || pin.length < 4}
             className="w-full neon-button-primary py-3 uppercase tracking-widest disabled:opacity-50"
           >
             Access System

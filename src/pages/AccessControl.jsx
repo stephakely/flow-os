@@ -41,10 +41,13 @@ export default function AccessControl({ user }) {
     e.preventDefault();
     if (!newEmail || !newName || !generatedPin) return;
 
-    // Vérification des doublons d'email
-    const existing = [...team, ...clients].find(u => u.email.toLowerCase() === newEmail.toLowerCase());
+    // Vérification des doublons d'email (strict : trim and lowercase)
+    const normalizedEmail = newEmail.trim().toLowerCase();
+    const allExisting = [...team, ...clients];
+    const existing = allExisting.find(u => u.email.toLowerCase() === normalizedEmail);
+    
     if (existing) {
-      alert(`⚠️ L'email ${newEmail} est déjà utilisé par ${existing.name} (${existing.role}). Veuillez supprimer l'ancien accès ou changer d'email.`);
+      alert(`⚠️ BLOCAGE : L'email ${normalizedEmail} est déjà utilisé par ${existing.name} (${existing.role}).\nSupprimez l'ancien accès avant d'en créer un nouveau.`);
       return;
     }
 
@@ -78,16 +81,25 @@ export default function AccessControl({ user }) {
       alert("Impossible de supprimer votre propre accès !");
       return;
     }
-    if (confirm(`Révoquer l'accès de ${member.name} ?`)) {
-      await api.deleteTeamMember(member.id);
-      loadUsers();
+    if (confirm(`Révoquer l'accès définitif de ${member.name} ?`)) {
+      try {
+        await api.deleteTeamMember(member.id);
+        // On attend un court délai pour laisser Firestore se mettre à jour
+        setTimeout(loadUsers, 500);
+      } catch (err) {
+        alert("Erreur lors de la suppression.");
+      }
     }
   };
 
   const handleDeleteClient = async (client) => {
     if (confirm(`Révoquer l'accès client de ${client.name} ?`)) {
-      await api.deleteClient(client.id);
-      loadUsers();
+      try {
+        await api.deleteClient(client.id);
+        setTimeout(loadUsers, 500);
+      } catch (err) {
+        alert("Erreur lors de la suppression.");
+      }
     }
   };
 
