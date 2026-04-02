@@ -51,7 +51,7 @@ export default function AccessControl({ user }) {
     const newUser = {
       id: `U_${Date.now()}`,
       name: newName,
-      email: newEmail,
+      email: newEmail.toLowerCase(),
       pin: generatedPin,
       role: newRole,
       totalEarned: 0

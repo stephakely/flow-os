@@ -10,7 +10,7 @@ export default function PinLogin({ email, onLogin, onBack }) {
   useEffect(() => {
     Promise.all([api.getTeam(), api.getClients()]).then(([teamData, clientsData]) => {
       const allUsers = [...teamData, ...clientsData];
-      const matches = allUsers.filter(u => u.email === email);
+      const matches = allUsers.filter(u => u.email.toLowerCase() === email.toLowerCase());
       
       if (matches.length > 0) {
         setTargetUser(matches); // On stocke la liste des matches
@@ -20,7 +20,7 @@ export default function PinLogin({ email, onLogin, onBack }) {
         setTargetUser({
           id: `ADMIN_${Date.now()}`,
           name: email.split('@')[0], // Pseudo dynamique par défaut
-          email: email,
+          email: email.toLowerCase(),
           role: 'admin',
           pin: '4444' // Le PIN maître de l'Admin
         });
