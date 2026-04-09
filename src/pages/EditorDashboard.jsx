@@ -40,7 +40,7 @@ export default function EditorDashboard({ user }) {
       const updatedSubtasks = project.subtasks.map(t => ({ ...t, done: false }));
       const updatedProject = { ...project, subtasks: updatedSubtasks };
       await api.saveProject(updatedProject);
-      loadData();
+      // La subscription Firestore met à jour l'UI automatiquement
     }
   };
 

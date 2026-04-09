@@ -93,6 +93,7 @@ export default function Production({ user }) {
   const [clients, setClients] = useState([]);
   const [team, setTeam] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Formulaire nouveau projet
   const [form, setForm] = useState({
