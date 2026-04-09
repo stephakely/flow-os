@@ -131,23 +131,35 @@ export default function App() {
   useEffect(() => {
     // Initialisation DB
     getDB().then((data) => {
-      const savedUser = localStorage.getItem('flow_os_user');
-      if (savedUser) setUser(JSON.parse(savedUser));
+      try {
+        const savedUser = localStorage.getItem('flow_os_user');
+        if (savedUser) setUser(JSON.parse(savedUser));
+      } catch(e) {
+        console.error("Local storage error:", e);
+        localStorage.removeItem('flow_os_user');
+      }
       
       // Vérification et Exécution du Reset Mensuel Automatique
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const lastReset = data.settings?.monthlyResetDate;
-      
-      if (!lastReset) {
-          import('./lib/apiService').then(({ api }) => {
-              api.updateSettings({ ...data.settings, monthlyResetDate: currentMonth });
-          });
-      } else if (lastReset !== currentMonth) {
-          import('./lib/apiService').then(({ api }) => {
-              api.performMonthlyReset();
-          });
+      try {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const lastReset = data?.settings?.monthlyResetDate;
+        
+        if (!lastReset) {
+            import('./lib/apiService').then(({ api }) => {
+                api.updateSettings({ ...data.settings, monthlyResetDate: currentMonth }).catch(console.error);
+            });
+        } else if (lastReset !== currentMonth) {
+            import('./lib/apiService').then(({ api }) => {
+                api.performMonthlyReset().catch(console.error);
+            });
+        }
+      } catch(e) {
+        console.error("Reset check error:", e);
       }
 
+      setLoading(false);
+    }).catch((e) => {
+      console.error("FATAL BOOT ERROR:", e);
       setLoading(false);
     });
   }, []);
