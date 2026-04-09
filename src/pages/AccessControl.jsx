@@ -12,6 +12,7 @@ export default function AccessControl({ user }) {
   const [generatedPin, setGeneratedPin] = useState('');
   const [copied, setCopied] = useState(false);
   const [contractType, setContractType] = useState('per_video');
+  const [contractAmount, setContractAmount] = useState('');
 
   useEffect(() => {
     // Real-time subscriptions for instant UI updates
@@ -40,15 +41,8 @@ export default function AccessControl({ user }) {
     e.preventDefault();
     if (!newEmail || !newName || !generatedPin) return;
 
-    // Vérification des doublons d'email (strict : trim and lowercase)
-    const normalizedEmail = newEmail.trim().toLowerCase();
-    const allExisting = [...team, ...clients];
-    const existing = allExisting.find(u => u.email.toLowerCase() === normalizedEmail);
-    
-    if (existing) {
-      alert(`⚠️ BLOCAGE : L'email ${normalizedEmail} est déjà utilisé par ${existing.name} (${existing.role}).\nSupprimez l'ancien accès avant d'en créer un nouveau.`);
-      return;
-    }
+    // Plus de blocage strict sur l'email : on peut avoir plusieurs 
+    // rôles/profils sous le même email (différenciés par le PIN).
 
     const newUser = {
       id: `U_${Date.now()}`,
@@ -62,6 +56,9 @@ export default function AccessControl({ user }) {
     if (newRole === 'client') {
       newUser.currency = 'EUR';
       newUser.contractType = contractType;
+      if (contractType !== 'per_video') {
+          newUser.contractAmount = parseFloat(contractAmount) || 0;
+      }
       await api.addClient(newUser);
     } else {
       await api.updateTeam(newUser);
@@ -71,6 +68,7 @@ export default function AccessControl({ user }) {
     setNewName('');
     setGeneratedPin('');
     setContractType('per_video');
+    setContractAmount('');
     alert(`✅ Accès créé pour ${newName} (${newRole}) – PIN: ${generatedPin}`);
     // No need to call loadUsers(), subscription handles it!
   };
@@ -158,19 +156,33 @@ export default function AccessControl({ user }) {
               />
             </div>
 
-            {/* Type de contrat (uniquement pour les clients) */}
             {newRole === 'client' && (
-              <div>
-                <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Type de Contrat</label>
-                <select 
-                  value={contractType} 
-                  onChange={e => setContractType(e.target.value)}
-                  className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
-                >
-                  <option value="per_video">📹 Par Vidéo</option>
-                  <option value="per_week">📅 Par Semaine</option>
-                  <option value="per_month">🗓️ Par Mois</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Type de Contrat</label>
+                  <select 
+                    value={contractType} 
+                    onChange={e => setContractType(e.target.value)}
+                    className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+                  >
+                    <option value="per_video">📹 Par Vidéo</option>
+                    <option value="per_week">📅 Par Semaine</option>
+                    <option value="per_month">🗓️ Par Mois</option>
+                  </select>
+                </div>
+                {contractType !== 'per_video' && (
+                  <div>
+                    <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Montant Forfait (€)</label>
+                    <input 
+                      type="number" 
+                      value={contractAmount} 
+                      onChange={e => setContractAmount(e.target.value)}
+                      required
+                      placeholder="Ex: 500"
+                      className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+                    />
+                  </div>
+                )}
               </div>
             )}
 

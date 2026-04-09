@@ -130,9 +130,24 @@ export default function App() {
 
   useEffect(() => {
     // Initialisation DB
-    getDB().then(() => {
+    getDB().then((data) => {
       const savedUser = localStorage.getItem('flow_os_user');
       if (savedUser) setUser(JSON.parse(savedUser));
+      
+      // Vérification et Exécution du Reset Mensuel Automatique
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const lastReset = data.settings?.monthlyResetDate;
+      
+      if (!lastReset) {
+          import('./lib/apiService').then(({ api }) => {
+              api.updateSettings({ ...data.settings, monthlyResetDate: currentMonth });
+          });
+      } else if (lastReset !== currentMonth) {
+          import('./lib/apiService').then(({ api }) => {
+              api.performMonthlyReset();
+          });
+      }
+
       setLoading(false);
     });
   }, []);

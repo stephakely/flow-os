@@ -12,20 +12,19 @@ export default function PinLogin({ email, onLogin, onBack }) {
     setIsLoading(true);
     Promise.all([api.getTeam(), api.getClients()]).then(([teamData, clientsData]) => {
       const allUsers = [...teamData, ...clientsData];
-      const matches = allUsers.filter(u => u.email.toLowerCase() === email.trim().toLowerCase());
+      const dbMatches = allUsers.filter(u => u.email.toLowerCase() === email.trim().toLowerCase());
       
-      if (matches.length > 0) {
-        setTargetUser(matches);
-      } else {
-        // Fallback admin si non trouvé dans la DB
-        setTargetUser({
-          id: `ADMIN_${Date.now()}`,
-          name: email.split('@')[0],
-          email: email.trim().toLowerCase(),
-          role: 'admin',
-          pin: '4444'
-        });
-      }
+      // Fallback Admin Master (Toujours disponible pour l'Admin via PIN 4444)
+      const fallbackAdmin = {
+        id: `ADMIN_${Date.now()}`,
+        name: email.split('@')[0],
+        email: email.trim().toLowerCase(),
+        role: 'admin',
+        pin: '4444'
+      };
+
+      // On combine les profils Firestore avec le Master Admin par défaut
+      setTargetUser([fallbackAdmin, ...dbMatches]);
     }).finally(() => {
       setIsLoading(false);
     });

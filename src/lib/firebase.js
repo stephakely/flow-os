@@ -1,5 +1,6 @@
 // src/lib/firebase.js
 import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -14,12 +15,13 @@ const firebaseConfig = {
   measurementId: "G-5YX6M3VNDT"
 };
 
-let app, auth, db, googleProvider;
+let app, auth, db, googleProvider, analytics;
 
 try {
   // Try to initialize only if keys are replaced or partially replaced (it might crash if completely fake)
   if(firebaseConfig.apiKey !== "REPLACE_ME_API_KEY") {
     app = initializeApp(firebaseConfig);
+    analytics = getAnalytics(app);
     auth = getAuth(app);
     db = getFirestore(app);
     googleProvider = new GoogleAuthProvider();

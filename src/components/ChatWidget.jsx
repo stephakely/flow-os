@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/apiService';
-import { MessageCircle, X, Send, Minimize2 } from 'lucide-react';
+import { MessageCircle, X, Send, Minimize2, Check, CheckCheck } from 'lucide-react';
 
 export default function ChatWidget({ user }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -105,52 +105,57 @@ export default function ChatWidget({ user }) {
 
       {/* Fenêtre de chat */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-96 h-[500px] flex flex-col rounded-2xl border border-cyber-neon/30 bg-cyber-card/95 backdrop-blur-xl shadow-[0_0_50px_-12px_rgba(0,255,170,0.3)] animate-fade-in overflow-hidden">
+        <div className="fixed bottom-6 right-6 z-50 w-80 md:w-96 h-[500px] flex flex-col rounded-xl overflow-hidden shadow-2xl animate-fade-in" style={{ backgroundColor: '#0b141a' }}>
           
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-cyber-border/30 bg-black/30">
+          {/* Header WhatsApp Style */}
+          <div className="flex items-center justify-between p-3" style={{ backgroundColor: '#202c33' }}>
             <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.5)]"></div>
+              <div className="w-10 h-10 rounded-full bg-cyber-dark overflow-hidden flex items-center justify-center border border-gray-600">
+                  <span className="text-white font-bold text-sm">G-C</span>
+              </div>
               <div>
-                <h3 className="font-bold text-white text-sm tracking-wider uppercase">Chat Studio</h3>
-                <span className="text-[10px] text-cyber-muted">{messages.length} messages</span>
+                <h3 className="font-semibold text-gray-100 text-[15px]">Groupe Studio</h3>
+                <span className="text-xs text-gray-400">{messages.length} messages</span>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-cyber-muted hover:text-white transition-colors p-1">
+            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white transition-colors p-2">
               <Minimize2 size={18} />
             </button>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar" style={{ backgroundImage: 'url("https://web.whatsapp.com/img/bg-chat-tile-dark_a4be512e7195b6b733d9110b408f075d.png")', backgroundColor: '#0b141a', backgroundRepeat: 'repeat' }}>
             {messages.length === 0 && (
-              <div className="text-center text-cyber-muted text-xs py-10 italic">
-                Aucun message. Lancez la conversation ! 💬
+              <div className="text-center text-gray-400 text-xs py-10">
+                L'historique des messages apparaîtra ici.
               </div>
             )}
             
             {Object.entries(groupedMessages).map(([date, msgs]) => (
               <div key={date}>
                 <div className="text-center my-3">
-                  <span className="text-[10px] text-cyber-muted bg-black/40 px-3 py-1 rounded-full uppercase tracking-widest">{date}</span>
+                  <span className="text-[12px] text-gray-400" style={{ backgroundColor: '#182229', padding: '4px 12px', borderRadius: '8px' }}>{date}</span>
                 </div>
                 {msgs.map(msg => {
                   const isMe = msg.senderId === user.id;
                   return (
-                    <div key={msg.id} className={`flex flex-col mb-3 ${isMe ? 'items-end' : 'items-start'}`}>
-                      {!isMe && (
-                        <span className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${getRoleColor(msg.senderRole)}`}>
-                          {msg.senderName}
-                        </span>
-                      )}
-                      <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                    <div key={msg.id} className={`flex flex-col mb-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                      <div className={`relative max-w-[85%] px-2 pt-1.5 pb-1 text-[14.5px] text-[#e9edef] ${
                         isMe 
-                          ? 'bg-cyber-neon/20 text-white border border-cyber-neon/30 rounded-br-sm' 
-                          : 'bg-black/40 text-gray-200 border border-cyber-border/30 rounded-bl-sm'
-                      }`}>
-                        {msg.text}
+                          ? 'rounded-l-lg rounded-br-lg' 
+                          : 'rounded-r-lg rounded-bl-lg'
+                      }`} style={{ backgroundColor: isMe ? '#005c4b' : '#202c33' }}>
+                        {!isMe && (
+                          <div className={`text-[12px] font-semibold mb-0.5 ${getRoleColor(msg.senderRole)}`}>
+                            {msg.senderName}
+                          </div>
+                        )}
+                        <div className="pr-12 leading-relaxed whitespace-pre-wrap">{msg.text}</div>
+                        <div className="absolute bottom-1 right-2 flex items-center gap-1">
+                            <span className="text-[10px] text-gray-400 opacity-80">{formatTime(msg.timestamp)}</span>
+                            {isMe && <CheckCheck size={14} className="text-[#53bdeb]" />}
+                        </div>
                       </div>
-                      <span className="text-[10px] text-cyber-muted mt-0.5">{formatTime(msg.timestamp)}</span>
                     </div>
                   );
                 })}
@@ -159,25 +164,24 @@ export default function ChatWidget({ user }) {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
-          <form onSubmit={handleSend} className="p-3 border-t border-cyber-border/30 bg-black/20">
-            <div className="flex gap-2">
+          {/* Input WhatsApp Style */}
+          <form onSubmit={handleSend} className="p-3 pl-4 flex gap-2 items-end" style={{ backgroundColor: '#202c33' }}>
               <input
                 type="text"
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                placeholder="Écrire un message..."
-                className="flex-1 bg-black/40 border border-cyber-border/50 text-white text-sm p-2.5 rounded-lg focus:border-cyber-neon outline-none placeholder:text-cyber-muted/50"
+                placeholder="Tapez un message"
+                className="flex-1 min-h-[40px] px-4 py-2 rounded-lg text-[15px] text-[#e9edef] outline-none"
+                style={{ backgroundColor: '#2a3942' }}
                 autoFocus
               />
               <button 
                 type="submit"
                 disabled={!input.trim()}
-                className="px-3 bg-cyber-neon/20 border border-cyber-neon/30 text-cyber-neon rounded-lg hover:bg-cyber-neon/30 transition-colors disabled:opacity-30"
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${input.trim() ? 'text-[#00a884]' : 'text-gray-500'}`}
               >
-                <Send size={18} />
+                <Send size={20} />
               </button>
-            </div>
           </form>
         </div>
       )}

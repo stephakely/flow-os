@@ -25,23 +25,20 @@ export default function EmailLogin({ onEmailValidated }) {
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !email.includes('@')) {
+        setError('FORMAT EMAIL INVALIDE');
+        return;
+    }
     setLoading(true);
     setError('');
-    try {
-      // Pour une authentification email véritable, Firebase a besoin d'un password.
-      // Dans le cadre de ce test, si ce compte n'est pas dans Firebase, ça va thrower.
-      // On wrap ça via notre service (qui mocke par défaut).
-      const result = await loginWithEmail(email.trim(), password);
-      if (result && result.user) {
-        onEmailValidated(result.user.email);
-      }
-    } catch (e) {
-      console.error(e);
-      setError('ERREUR D\'IDENTIFICATION');
-    } finally {
-      setLoading(false);
-    }
+    
+    // On bypass l'authentification stricte de Firebase (mot de passe),
+    // car la véritable identification est basée sur le PIN propre à l'email.
+    // N'importe quel email généré par l'admin peut donc accéder à la phase 2.
+    setTimeout(() => {
+        onEmailValidated(email.trim().toLowerCase());
+        setLoading(false);
+    }, 500); // Petit délai pour le style "décryptage"
   };
 
   return (

@@ -8,43 +8,59 @@ export default function Dashboard({ user }) {
   const [monthlyData, setMonthlyData] = useState([]);
   const [velocityData, setVelocityData] = useState([]);
   const [clientProfitData, setClientProfitData] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [archives, setArchives] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
-    // Refresh data when Firestore updates
-    window.addEventListener('flow-db-update', loadData);
-    return () => window.removeEventListener('flow-db-update', loadData);
+    setLoading(true);
+    
+    // Subscriptions for real-time dashboard
+    const unsubProjects = api.subscribeProjects(setProjects);
+    const unsubCRM = api.subscribeCRMLeads(setLeads);
+    const unsubArchives = api.subscribeArchives((data) => {
+      setArchives(data);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubProjects();
+      unsubCRM();
+      unsubArchives();
+    };
   }, []);
 
-  const loadData = async () => {
-    const archives = await api.getArchives();
-    const projects = await api.getProjects();
-    const leads = await api.getCRMLeads();
-    const clients = await api.getClients();
-
+  useEffect(() => {
     // Stats rapides
     const revenue = archives.reduce((acc, a) => acc + a.price, 0);
     const crmValue = leads.reduce((acc, l) => acc + l.value, 0);
     setStats({ revenue, projects: projects.length, crmValue });
 
-    // Génération données graphiques mock pour Recharts basées sur les archives
-    // Normalement on groupe par mois depuis les archives. Ici on simule si vide
-    if(archives.length === 0) {
-      setMonthlyData([
-        { name: 'Jan', value: 4000 }, { name: 'Fév', value: 3000 }, { name: 'Mar', value: 6500 }, { name: 'Avr', value: 1500 }
-      ]);
-      setVelocityData([
-        { name: 'Jan', count: 4 }, { name: 'Fév', count: 3 }, { name: 'Mar', count: 8 }, { name: 'Avr', count: 1 }
-      ]);
+    // Génération de données réelles pour Recharts basées sur les archives
+    if (archives.length > 0) {
+      const monthlyStats = {};
+      archives.forEach(arch => {
+        const date = new Date(arch.archivedAt || Date.now());
+        const monthName = date.toLocaleString('default', { month: 'short' });
+        const year = date.getFullYear();
+        const key = `${monthName} ${year}`;
+        
+        if (!monthlyStats[key]) {
+          monthlyStats[key] = { name: key, value: 0, count: 0 };
+        }
+        monthlyStats[key].value += (arch.price || 0);
+        monthlyStats[key].count += 1;
+      });
+      
+      const statsArray = Object.values(monthlyStats);
+      setMonthlyData(statsArray.map(s => ({ name: s.name, value: s.value })));
+      setVelocityData(statsArray.map(s => ({ name: s.name, count: s.count })));
+    } else {
+      setMonthlyData([]);
+      setVelocityData([]);
     }
-
-    if(clients.length > 0) {
-      setClientProfitData([
-        { name: clients[0].name, profit: 1500 },
-        { name: 'Autre Client', profit: 4500 }
-      ]);
-    }
-  };
+  }, [archives, leads, projects]);
 
   const Widget = ({ title, value, icon: Icon, colorClass }) => (
     <div className="glass-card p-6 flex flex-col justify-between hover:shadow-neon-hover transition-all">

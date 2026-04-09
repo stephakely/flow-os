@@ -7,19 +7,16 @@ export default function ClientDashboard({ user }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadProjects();
-    const handleDbUpdate = () => loadProjects();
-    window.addEventListener('flow-db-update', handleDbUpdate);
-    return () => window.removeEventListener('flow-db-update', handleDbUpdate);
-  }, []);
+    setLoading(true);
+    const unsub = api.subscribeProjects((data) => {
+      // Le client ne voit que ses projets
+      const myProjects = data.filter(p => p.clientId === user.id);
+      setProjects(myProjects);
+      setLoading(false);
+    });
 
-  const loadProjects = async () => {
-    const allProjects = await api.getProjects();
-    // Le client ne voit que ses projets
-    const myProjects = allProjects.filter(p => p.clientId === user.id);
-    setProjects(myProjects);
-    setLoading(false);
-  };
+    return () => unsub();
+  }, [user.id]);
 
   if (loading) return <div className="text-cyber-neon animate-pulse p-8">CHARGEMENT DES DONNÉES...</div>;
 
@@ -30,6 +27,21 @@ export default function ClientDashboard({ user }) {
         <div>
           <h1 className="text-3xl font-bold tracking-widest text-cyber-neon">ESPACE CLIENT</h1>
           <p className="text-cyber-muted tracking-widest text-sm mt-1 uppercase">{user.name}</p>
+        </div>
+        
+        <div className="text-right">
+          <p className="text-[10px] text-cyber-muted tracking-widest uppercase mb-1">
+            {user.contractType === 'per_month' ? 'Forfait Mensuel Actif' : 
+             user.contractType === 'per_week' ? 'Forfait Hebdomadaire Actif' : 
+             'Factures En Attente (Par Vidéo)'}
+          </p>
+          <div className="text-4xl font-black font-mono text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.4)]">
+            {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: user.currency || 'EUR' }).format(
+              user.contractType === 'per_video' || !user.contractType
+                ? projects.filter(p => p.payment_status === 'EN ATTENTE').reduce((sum, p) => sum + (Number(p.price) || 0), 0)
+                : (user.contractAmount || 0)
+            )}
+          </div>
         </div>
       </header>
 

@@ -11,7 +11,8 @@ import {
   query, 
   where,
   onSnapshot,
-  orderBy
+  orderBy,
+  addDoc
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -99,14 +100,51 @@ export const getDB = async () => {
     return { projects, team, clients, archives, crmLeads, settings };
 };
 
+export const saveDB = async () => {};
+
+export const exportBackup = async () => {
+    const dbData = await getDB();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dbData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "flow_os_backup_" + new Date().getTime() + ".json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+};
+
+export const importBackup = async (jsonStr) => {
+    try {
+        const data = JSON.parse(jsonStr);
+        if (data.settings) await setDoc(doc(db, 'settings', 'main'), data.settings);
+        
+        const collections = {
+            'projects': data.projects,
+            'team': data.team,
+            'clients': data.clients,
+            'archives': data.archives,
+            'crmLeads': data.crmLeads
+        };
+        
+        for (const [collName, items] of Object.entries(collections)) {
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    const { id, ...rest } = item;
+                    if (id) await setDoc(doc(db, collName, id), rest);
+                }
+            }
+        }
+        return true;
+    } catch(e) {
+        console.error(e);
+        return false;
+    }
+};
+
 // --- Logiques Métier ---
 
 export const computeNetNet = (price, feePct, isTeamCalculation = false) => {
   const netPlatform = price - (price * (feePct / 100));
-  if (isTeamCalculation) {
-    const netWithoutVat = netPlatform / 1.20;
-    return netWithoutVat;
-  }
   return netPlatform;
 };
 
@@ -162,6 +200,27 @@ export const api = {
     return sDoc.exists() ? sDoc.data() : initialData.settings;
   },
 
+  subscribeProjects: (callback) => {
+    return onSnapshot(collection(db, 'projects'), (snapshot) => {
+      const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(projects);
+    });
+  },
+
+  subscribeArchives: (callback) => {
+    return onSnapshot(collection(db, 'archives'), (snapshot) => {
+      const archives = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(archives);
+    });
+  },
+
+  subscribeCRMLeads: (callback) => {
+    return onSnapshot(collection(db, 'crmLeads'), (snapshot) => {
+      const leads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(leads);
+    });
+  },
+
   updateCRMLead: async (lead) => {
     const { id, ...data } = lead;
     if (data.email) data.email = data.email.trim().toLowerCase();
@@ -201,6 +260,38 @@ export const api = {
   updateSettings: async (settings) => {
     await setDoc(doc(db, 'settings', 'main'), settings);
     window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  archiveCompletedProjects: async () => {
+    const projectsSnap = await getDocs(collection(db, 'projects'));
+    const projects = projectsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let count = 0;
+    for (const p of projects) {
+        const isDone = p.subtasks && p.subtasks.length > 0 && p.subtasks.every(t => t.done) && p.payment_status === 'PAYÉ';
+        if (isDone) {
+            await api.archiveProject(p);
+            count++;
+        }
+    }
+    return count;
+  },
+
+  performMonthlyReset: async () => {
+    // 1. Archiver les projets finis (ce qui calcule aussi les gains restants)
+    await api.archiveCompletedProjects();
+    
+    // 2. Remettre les compteurs de gains de toute l'équipe à 0
+    const teamSnap = await getDocs(collection(db, 'team'));
+    for (const memberDoc of teamSnap.docs) {
+        if (memberDoc.data().totalEarned > 0) {
+            await updateDoc(doc(db, 'team', memberDoc.id), { totalEarned: 0 });
+        }
+    }
+    
+    // 3. Mettre à jour le mois
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const settings = await api.getSettings();
+    await api.updateSettings({ ...settings, monthlyResetDate: currentMonth });
   },
 
   getMessages: async () => await getCollection('chatMessages'),

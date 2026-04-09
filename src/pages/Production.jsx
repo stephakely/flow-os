@@ -102,34 +102,34 @@ export default function Production({ user }) {
   });
 
   useEffect(() => {
-    loadData();
-    const handleDbUpdate = () => loadData();
-    window.addEventListener('flow-db-update', handleDbUpdate);
-    return () => window.removeEventListener('flow-db-update', handleDbUpdate);
-  }, []);
+    setLoading(true);
+    const unsub = api.subscribeProjects((data) => {
+      if (user.role === 'admin') {
+        setProjects(data);
+      } else {
+        setProjects(data.filter(x => x.assigneeId === user.id));
+      }
+      setLoading(false);
+    });
+    
+    const loadStaticData = async () => {
+      setClients(await api.getClients());
+      setTeam(await api.getTeam());
+    };
+    loadStaticData();
 
-  const loadData = async () => {
-    const p = await api.getProjects();
-    setClients(await api.getClients());
-    setTeam(await api.getTeam());
-    if (user.role === 'admin') {
-      setProjects(p);
-    } else {
-      setProjects(p.filter(x => x.assigneeId === user.id));
-    }
-  };
+    return () => unsub();
+  }, []);
 
   const handleArchive = async (p) => {
     if(confirm("Archiver ce projet et le fermer ?")) {
       await api.archiveProject(p);
-      loadData();
     }
   };
 
   const handleDelete = async (p) => {
     if(confirm("Supprimer définitivement ce projet ?")) {
       await api.deleteProject(p.id);
-      loadData();
     }
   };
 
@@ -138,20 +138,17 @@ export default function Production({ user }) {
       t.id === subtaskId ? { ...t, done: !t.done } : t
     );
     await api.saveProject({ ...project, subtasks: updatedSubtasks });
-    loadData();
   };
 
   const togglePaymentStatus = async (project) => {
     const newStatus = project.payment_status === 'PAYÉ' ? 'EN ATTENTE' : 'PAYÉ';
     await api.saveProject({ ...project, payment_status: newStatus });
-    loadData();
   };
 
   const resetAllSubtasks = async (project) => {
     if(confirm("Réinitialiser toutes les tâches du projet ?")) {
       const updatedSubtasks = project.subtasks.map(t => ({ ...t, done: false }));
       await api.saveProject({ ...project, subtasks: updatedSubtasks });
-      loadData();
     }
   };
 
@@ -177,7 +174,6 @@ export default function Production({ user }) {
     await api.saveProject(newProject);
     setShowModal(false);
     setForm({ title: '', clientId: '', assigneeId: '', price: '', priority: 'NORMAL', link_rushes: '', link_review: '', platform_fee_pct: 2, subtaskInput: '', subtasks: [] });
-    loadData();
   };
 
   const addSubtaskToForm = () => {
@@ -204,9 +200,19 @@ export default function Production({ user }) {
           <p className="text-cyber-muted tracking-widest mt-1 text-sm uppercase">Active Workloads ({projects.length})</p>
         </div>
         {user.role === 'admin' && (
-           <button onClick={() => setShowModal(true)} className="neon-button-primary flex items-center gap-2">
-             <Plus size={18} /> Nouveau Projet
-           </button>
+           <div className="flex gap-4">
+             <button onClick={async () => {
+                 if(confirm("Archiver TOUS les projets 100% terminés et payés ?")) {
+                     const count = await api.archiveCompletedProjects();
+                     alert(count + " projet(s) archivé(s).");
+                 }
+             }} className="neon-button-secondary flex items-center gap-2 border-dashed">
+               <RefreshCw size={18} /> Clean
+             </button>
+             <button onClick={() => setShowModal(true)} className="neon-button-primary flex items-center gap-2">
+               <Plus size={18} /> Nouveau Projet
+             </button>
+           </div>
         )}
       </header>
 
@@ -334,7 +340,7 @@ export default function Production({ user }) {
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Prix TTC (€) *</label>
+                  <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Prix (€) *</label>
                   <input type="number" required value={form.price} onChange={e => setForm({...form, price: e.target.value})}
                     className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none" placeholder="1500" />
                 </div>

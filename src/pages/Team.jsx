@@ -101,7 +101,7 @@ export default function Team({ user }) {
               </div>
 
               <div className="mt-auto pt-4 border-t border-cyber-border/30">
-                <p className="text-xs text-cyber-muted mb-1 uppercase tracking-wider">Total Net Earned (Sans TVA 20%)</p>
+                <p className="text-xs text-cyber-muted mb-1 uppercase tracking-wider">Total Net Earned</p>
                 <div className="text-2xl font-black text-green-400 flex items-center gap-2">
                   <Zap size={20} />
                   {formatAmount(member.totalEarned, 'EUR')}

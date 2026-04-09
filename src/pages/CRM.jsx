@@ -281,7 +281,7 @@ export default function CRM({ user }) {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Prix TTC (€)</label>
+                  <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Prix (€)</label>
                   <input type="number" value={convertForm.price} onChange={e => setConvertForm({...convertForm, price: e.target.value})}
                     className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-green-500 outline-none" />
                 </div>

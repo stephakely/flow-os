@@ -52,30 +52,22 @@ export default function Archives({ user }) {
     doc.line(14, 85, 196, 85);
     doc.text("Description", 14, 92);
     doc.text("Quantité", 140, 92);
-    doc.text("Total HT", 170, 92);
+    doc.text("Total", 170, 92);
     doc.line(14, 96, 196, 96);
     
     doc.setFont("helvetica", "normal");
     doc.text(project.title, 14, 105);
     doc.text("1", 145, 105);
     
-    const priceHT = project.price / 1.20;
-    const tva = project.price - priceHT;
-    
-    doc.text(formatAmount(priceHT, project.currency), 170, 105);
+    doc.text(formatAmount(project.price, project.currency), 170, 105);
     
     // Totals
     doc.line(120, 130, 196, 130);
-    doc.text("Sous-total HT :", 125, 138);
-    doc.text(formatAmount(priceHT, project.currency), 170, 138);
-    
-    doc.text("TVA (20%) :", 125, 145);
-    doc.text(formatAmount(tva, project.currency), 170, 145);
     
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("TOTAL TTC :", 125, 155);
-    doc.text(formatAmount(project.price, project.currency), 170, 155);
+    doc.text("TOTAL :", 125, 140);
+    doc.text(formatAmount(project.price, project.currency), 170, 140);
     
     // Footer
     doc.setFont("helvetica", "italic");
@@ -100,7 +92,7 @@ export default function Archives({ user }) {
               <th className="p-4 rounded-tl-xl">Projet</th>
               <th className="p-4">Date</th>
               <th className="p-4">Client</th>
-              <th className="p-4">Montant TTC</th>
+              <th className="p-4">Montant Total</th>
               <th className="p-4 rounded-tr-xl text-right">Actions</th>
             </tr>
           </thead>

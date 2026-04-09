@@ -8,19 +8,22 @@ export default function EditorDashboard({ user }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
-    const handleDbUpdate = () => loadData();
-    window.addEventListener('flow-db-update', handleDbUpdate);
-    return () => window.removeEventListener('flow-db-update', handleDbUpdate);
-  }, []);
+    setLoading(true);
+    
+    const unsubProjects = api.subscribeProjects((data) => {
+      setProjects(data.filter(p => p.assigneeId === user.id));
+      setLoading(false);
+    });
 
-  const loadData = async () => {
-    const allProjects = await api.getProjects();
-    const allArchives = await api.getArchives();
-    setProjects(allProjects.filter(p => p.assigneeId === user.id));
-    setArchives(allArchives.filter(a => a.assigneeId === user.id));
-    setLoading(false);
-  };
+    const unsubArchives = api.subscribeArchives((data) => {
+      setArchives(data.filter(a => a.assigneeId === user.id));
+    });
+
+    return () => {
+      unsubProjects();
+      unsubArchives();
+    };
+  }, [user.id]);
 
   const toggleSubtask = async (projectId, subtaskId) => {
     const project = projects.find(p => p.id === projectId);
@@ -29,7 +32,7 @@ export default function EditorDashboard({ user }) {
     );
     const updatedProject = { ...project, subtasks: updatedSubtasks };
     await api.saveProject(updatedProject);
-    loadData();
+    // No need to call loadData(), subscription handles it!
   };
 
   const resetAllSubtasks = async (project) => {
