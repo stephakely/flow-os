@@ -129,37 +129,36 @@ export default function App() {
   const [verifiedEmail, setVerifiedEmail] = useState(null);
 
   useEffect(() => {
-    // Initialisation DB
-    getDB().then((data) => {
+    // Timeout de sécurité : si Firebase met trop de temps, on boot quand même
+    const bootTimeout = new Promise((resolve) => setTimeout(() => resolve(null), 6000));
+    const bootDB = getDB().catch(() => null);
+
+    Promise.race([bootDB, bootTimeout]).then((data) => {
       try {
         const savedUser = localStorage.getItem('flow_os_user');
         if (savedUser) setUser(JSON.parse(savedUser));
-      } catch(e) {
-        console.error("Local storage error:", e);
+      } catch (e) {
         localStorage.removeItem('flow_os_user');
       }
-      
-      // Vérification et Exécution du Reset Mensuel Automatique
-      try {
-        const currentMonth = new Date().toISOString().slice(0, 7);
-        const lastReset = data?.settings?.monthlyResetDate;
-        
-        if (!lastReset) {
+
+      if (data) {
+        try {
+          const currentMonth = new Date().toISOString().slice(0, 7);
+          const lastReset = data?.settings?.monthlyResetDate;
+          if (!lastReset) {
             import('./lib/apiService').then(({ api }) => {
-                api.updateSettings({ ...data.settings, monthlyResetDate: currentMonth }).catch(console.error);
+              api.updateSettings({ ...data.settings, monthlyResetDate: currentMonth }).catch(console.error);
             });
-        } else if (lastReset !== currentMonth) {
+          } else if (lastReset !== currentMonth) {
             import('./lib/apiService').then(({ api }) => {
-                api.performMonthlyReset().catch(console.error);
+              api.performMonthlyReset().catch(console.error);
             });
+          }
+        } catch (e) {
+          console.error('Reset check error:', e);
         }
-      } catch(e) {
-        console.error("Reset check error:", e);
       }
 
-      setLoading(false);
-    }).catch((e) => {
-      console.error("FATAL BOOT ERROR:", e);
       setLoading(false);
     });
   }, []);
