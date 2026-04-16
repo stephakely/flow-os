@@ -1,164 +1,254 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api, formatAmount } from '../lib/apiService';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { DollarSign, Activity, Users, Star } from 'lucide-react';
+import { TrendingUp, Film, Users, Briefcase, AlertTriangle, CheckCircle, Clock, DollarSign, BarChart2, ArrowUpRight, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-import { motion } from 'framer-motion';
-
-export default function Dashboard({ user }) {
-  const [stats, setStats] = useState({ revenue: 0, projects: 0, crmValue: 0, activeTeam: 0 });
-  const [monthlyData, setMonthlyData] = useState([]);
-  const [velocityData, setVelocityData] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [leads, setLeads] = useState([]);
-  const [archives, setArchives] = useState([]);
-  const [team, setTeam] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    const unsubProjects = api.subscribeProjects(setProjects);
-    const unsubCRM = api.subscribeCRMLeads(setLeads);
-    const unsubTeam = api.subscribeTeam(setTeam);
-    const unsubArchives = api.subscribeArchives((data) => {
-      setArchives(data);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubProjects();
-      unsubCRM();
-      unsubTeam();
-      unsubArchives();
-    };
-  }, []);
-
-  useEffect(() => {
-    const revenue = archives.reduce((acc, a) => acc + (a.price || 0), 0);
-    const crmValue = leads.reduce((acc, l) => acc + (l.value || 0), 0);
-    setStats({ revenue, projects: projects.length, crmValue, activeTeam: team.length });
-
-    if (archives.length > 0) {
-      const monthlyStats = {};
-      archives.forEach(arch => {
-        const date = new Date(arch.archivedAt || Date.now());
-        const monthName = date.toLocaleString('default', { month: 'short' });
-        const key = `${monthName}`;
-        
-        if (!monthlyStats[key]) {
-          monthlyStats[key] = { name: key, value: 0, count: 0 };
-        }
-        monthlyStats[key].value += (arch.price || 0);
-        monthlyStats[key].count += 1;
-      });
-      
-      const statsArray = Object.values(monthlyStats);
-      setMonthlyData(statsArray);
-      setVelocityData(statsArray);
-    }
-  }, [archives, leads, projects, team]);
-
-  const Widget = ({ title, value, icon: Icon, color, delay }) => (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay }}
-      className="glass-card p-6 border-l-4"
-      style={{ borderColor: color }}
+function StatCard({ label, value, sub, icon: Icon, color = 'cyber-neon', onClick }) {
+  const colorMap = {
+    'cyber-neon': 'border-cyber-neon/20 bg-cyber-neon/5 text-cyber-neon',
+    'green': 'border-green-500/20 bg-green-500/5 text-green-400',
+    'red': 'border-red-500/20 bg-red-500/5 text-red-400',
+    'yellow': 'border-yellow-500/20 bg-yellow-500/5 text-yellow-400',
+    'purple': 'border-purple-500/20 bg-purple-500/5 text-purple-400',
+    'blue': 'border-blue-500/20 bg-blue-500/5 text-blue-400',
+  };
+  return (
+    <div
+      onClick={onClick}
+      className={`glass-card p-5 border ${colorMap[color]} flex items-center gap-4 ${onClick ? 'cursor-pointer hover:scale-[1.02] transition-transform' : ''}`}
     >
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-cyber-muted font-bold mb-1">{title}</p>
-          <h3 className="text-3xl font-black text-white tracking-tighter">{value}</h3>
-        </div>
-        <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-          <Icon size={20} style={{ color }} />
-        </div>
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorMap[color]} border shrink-0`}>
+        <Icon size={22} />
       </div>
-    </motion.div>
-  );
-
-  if (loading) return (
-    <div className="text-cyber-neon animate-pulse p-8 font-mono tracking-[0.5em] text-center w-full mt-20">
-      DECRYPTING ANALYTICS...
+      <div className="min-w-0">
+        <p className="text-xs text-cyber-muted uppercase tracking-widest truncate">{label}</p>
+        <p className={`text-2xl font-black mt-0.5 ${colorMap[color].split(' ').pop()}`}>{value}</p>
+        {sub && <p className="text-xs text-cyber-muted mt-0.5 truncate">{sub}</p>}
+      </div>
     </div>
   );
+}
+
+export default function Dashboard({ user }) {
+  const [projects, setProjects] = useState([]);
+  const [archives, setArchives] = useState([]);
+  const [team, setTeam] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [settings, setSettings] = useState({});
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const u1 = api.subscribeProjects(setProjects);
+    const u2 = api.subscribeArchives(setArchives);
+    const u3 = api.subscribeTeam(setTeam);
+    const u4 = api.subscribeClients(setClients);
+    const u5 = api.subscribeCRMLeads(setLeads);
+    api.getSettings().then(setSettings);
+    return () => { u1(); u2(); u3(); u4(); u5(); };
+  }, []);
+
+  // KPIs
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const monthlyRevenue = archives
+    .filter(a => a.archivedAt?.startsWith(currentMonth))
+    .reduce((s, a) => s + (a.price || 0), 0);
+
+  const totalRevenue = archives.reduce((s, a) => s + (a.price || 0), 0);
+  const pendingPayment = projects.filter(p => p.payment_status !== 'PAYÉ').reduce((s, p) => s + (p.price || 0), 0);
+  const urgentProjects = projects.filter(p => p.priority === 'URGENCE');
+  const paidProjects = projects.filter(p => p.payment_status === 'PAYÉ').length;
+  const overdueProjects = projects.filter(p => p.deadline && new Date(p.deadline) < new Date() && p.payment_status !== 'PAYÉ');
+
+  const pipelineValue = leads.reduce((s, l) => s + (l.value || 0), 0);
+
+  // Completion % global
+  const avgCompletion = projects.length > 0
+    ? Math.round(projects.reduce((s, p) => {
+        const done = p.subtasks?.filter(t => t.done).length || 0;
+        const total = p.subtasks?.length || 0;
+        return s + (total > 0 ? done / total : 0);
+      }, 0) / projects.length * 100)
+    : 0;
+
+  // Top éditors par gains
+  const topEditors = [...team]
+    .filter(t => t.role === 'editor')
+    .sort((a, b) => (b.totalEarned || 0) - (a.totalEarned || 0))
+    .slice(0, 5);
+
+  // Revenus 6 derniers mois
+  const revenueByMonth = {};
+  archives.forEach(a => {
+    const m = a.archivedAt?.slice(0, 7);
+    if (!m) return;
+    revenueByMonth[m] = (revenueByMonth[m] || 0) + (a.price || 0);
+  });
+  const last6Months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    return d.toISOString().slice(0, 7);
+  });
+  const maxMonthly = Math.max(...last6Months.map(m => revenueByMonth[m] || 0), 1);
+
+  // Activité récente (archives)
+  const recentArchives = [...archives]
+    .sort((a, b) => b.archivedAt?.localeCompare(a.archivedAt))
+    .slice(0, 5);
 
   return (
-    <div className="space-y-10 pb-20">
-      <header className="flex justify-between items-end border-b border-white/5 pb-8">
+    <div className="space-y-6 animate-fade-in pb-10">
+      <header className="flex justify-between items-end">
         <div>
-          <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic">System <span className="text-cyber-neon">Overview</span></h1>
-          <p className="text-cyber-muted tracking-[0.3em] font-mono text-[10px] uppercase mt-2">Operator: {user?.name}</p>
+          <h1 className="text-3xl font-bold text-white">
+            {settings.studioName || 'FLOW_OS'} <span className="text-cyber-neon">Dashboard</span>
+          </h1>
+          <p className="text-cyber-muted text-sm mt-1 uppercase tracking-widest">
+            {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-cyber-neon animate-pulse" />
-            <span className="text-[10px] font-bold text-cyber-neon uppercase tracking-widest">Live Link Active</span>
-        </div>
+        {urgentProjects.length > 0 && (
+          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-2 rounded-lg animate-pulse">
+            <AlertTriangle size={14} />
+            {urgentProjects.length} URGENCE{urgentProjects.length > 1 ? 'S' : ''}
+          </div>
+        )}
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Widget title="Total Revenue" value={formatAmount(stats.revenue)} icon={DollarSign} color="#00ffaa" delay={0.1} />
-        <Widget title="Active Workloads" value={stats.projects} icon={Activity} color="#bc13fe" delay={0.2} />
-        <Widget title="Lead Pipeline" value={formatAmount(stats.crmValue)} icon={Star} color="#ffd700" delay={0.3} />
-        <Widget title="Neural Assets" value={stats.activeTeam} icon={Users} color="#1326ff" delay={0.4} />
+      {/* Row 1 — KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="CA Ce Mois" value={formatAmount(monthlyRevenue)} sub={`Total: ${formatAmount(totalRevenue)}`} icon={TrendingUp} color="green" onClick={() => navigate('/app/finances')} />
+        <StatCard label="En Attente Paiement" value={formatAmount(pendingPayment)} sub={`${projects.length - paidProjects} projets`} icon={DollarSign} color="yellow" onClick={() => navigate('/app/production')} />
+        <StatCard label="Projets Actifs" value={projects.length} sub={`${avgCompletion}% complétion moy.`} icon={Film} color="cyber-neon" onClick={() => navigate('/app/production')} />
+        <StatCard label="Pipeline CRM" value={formatAmount(pipelineValue)} sub={`${leads.length} opportunités`} icon={Briefcase} color="purple" onClick={() => navigate('/app/crm')} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 }}
-          className="glass-card p-8 min-h-[400px]"
-        >
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-[10px] font-black text-cyber-muted uppercase tracking-[0.3em]">Revenue Flux</h2>
-            <div className="text-[10px] text-cyber-neon font-bold uppercase">Archive Data</div>
-          </div>
-          <div className="h-64 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="name" stroke="#555" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#555" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `€${val/1000}k`} />
-                <Tooltip 
-                  cursor={{fill: 'rgba(255, 255, 255, 0.05)'}} 
-                  contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                />
-                <Bar dataKey="value" fill="#00ffaa" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+      {/* Row 2 — infos secondaires */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Membres Équipe" value={team.length} sub={`${clients.length} clients`} icon={Users} color="blue" onClick={() => navigate('/app/team')} />
+        <StatCard label="Vidéos Livrées" value={archives.length} icon={CheckCircle} color="green" />
+        <StatCard label="URGENCES" value={urgentProjects.length} icon={AlertTriangle} color={urgentProjects.length > 0 ? 'red' : 'green'} onClick={() => navigate('/app/production')} />
+        <StatCard label="Retards" value={overdueProjects.length} icon={Clock} color={overdueProjects.length > 0 ? 'red' : 'green'} onClick={() => navigate('/app/planning')} />
+      </div>
 
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.6 }}
-          className="glass-card p-8 min-h-[400px]"
-        >
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-[10px] font-black text-cyber-muted uppercase tracking-[0.3em]">Recent Decrypted Events</h2>
-            <button className="text-[10px] text-cyber-blue font-bold uppercase hover:text-white transition-colors">Clear Log</button>
-          </div>
-          <div className="space-y-4">
-            {archives.slice(0, 5).map((a, i) => (
-              <div key={i} className="flex items-center gap-4 bg-white/5 p-3 rounded-xl border border-white/5 group hover:border-cyber-neon/30 transition-all">
-                <div className="w-8 h-8 rounded-lg bg-cyber-neon/10 flex items-center justify-center text-cyber-neon">
-                  <Activity size={14} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Revenus 6 mois */}
+        <div className="lg:col-span-2 glass-card p-6">
+          <h2 className="text-sm font-bold text-cyber-muted uppercase tracking-widest mb-4 flex items-center gap-2">
+            <BarChart2 size={16} /> Revenus — 6 Derniers Mois
+          </h2>
+          <div className="flex items-end gap-2 h-28">
+            {last6Months.map(m => {
+              const rev = revenueByMonth[m] || 0;
+              const pct = Math.max((rev / maxMonthly) * 100, 2);
+              const isCurrentMonth = m === currentMonth;
+              return (
+                <div key={m} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[9px] text-cyber-muted">{rev > 0 ? formatAmount(rev).replace('EUR', '').trim() : '—'}</span>
+                  <div className="w-full rounded-t-lg transition-all duration-700" style={{
+                    height: `${pct}%`,
+                    background: isCurrentMonth
+                      ? 'linear-gradient(to top, #00ffaa, #00ffaa88)'
+                      : 'linear-gradient(to top, #4ade8055, #4ade8022)',
+                    boxShadow: isCurrentMonth ? '0 0 12px rgba(0,255,170,0.4)' : 'none'
+                  }} />
+                  <span className="text-[9px] text-cyber-muted">{m.slice(5)}</span>
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-white group-hover:text-cyber-neon transition-colors">{a.title}</div>
-                  <div className="text-[9px] text-cyber-muted uppercase mt-0.5 font-mono">{new Date(a.archivedAt).toLocaleDateString()} • {formatAmount(a.price)}</div>
-                </div>
-                <div className="ml-auto text-[9px] text-cyber-neon font-bold font-mono">ARCHIVED</div>
-              </div>
-            ))}
-            {archives.length === 0 && (
-              <div className="text-center py-20 text-cyber-muted text-[10px] uppercase font-bold tracking-widest opacity-30 italic">No events recorded in current cycle</div>
-            )}
+              );
+            })}
           </div>
-        </motion.div>
+        </div>
+
+        {/* Top Éditeurs */}
+        <div className="glass-card p-6">
+          <h2 className="text-sm font-bold text-cyber-muted uppercase tracking-widest mb-4 flex items-center gap-2">
+            <Users size={16} /> Top Éditeurs
+          </h2>
+          {topEditors.length === 0 ? (
+            <p className="text-cyber-muted text-xs text-center py-6">Aucun éditeur configuré</p>
+          ) : (
+            <div className="space-y-3">
+              {topEditors.map((e, i) => (
+                <div key={e.id} className="flex items-center gap-3">
+                  <span className="text-xs font-black text-cyber-muted w-4">#{i + 1}</span>
+                  <div className="w-7 h-7 rounded-full bg-cyber-neon/10 border border-cyber-neon/20 flex items-center justify-center text-cyber-neon font-bold text-xs">
+                    {e.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">{e.name}</p>
+                    <div className="w-full h-1 bg-black/50 rounded-full mt-1">
+                      <div className="h-full bg-cyber-neon rounded-full" style={{
+                        width: `${topEditors[0].totalEarned > 0 ? (e.totalEarned / topEditors[0].totalEarned) * 100 : 0}%`
+                      }} />
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono text-green-400">{formatAmount(e.totalEarned || 0)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Projets urgents */}
+        {urgentProjects.length > 0 && (
+          <div className="glass-card p-6 border border-red-500/20">
+            <h2 className="text-sm font-bold text-red-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <AlertTriangle size={16} /> Projets Urgents
+            </h2>
+            <div className="space-y-2">
+              {urgentProjects.slice(0, 4).map(p => {
+                const done = p.subtasks?.filter(t => t.done).length || 0;
+                const total = p.subtasks?.length || 0;
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                const member = team.find(t => t.id === p.assigneeId);
+                return (
+                  <div key={p.id} className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <p className="text-sm font-semibold text-white">{p.title}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded ${p.payment_status === 'PAYÉ' ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
+                        {p.payment_status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      {member && <span className="text-xs text-cyber-muted">🎬 {member.name}</span>}
+                      <div className="flex-1 h-1 bg-black/50 rounded-full">
+                        <div className="h-full bg-red-400 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs text-red-400">{pct}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Activité Récente */}
+        <div className="glass-card p-6">
+          <h2 className="text-sm font-bold text-cyber-muted uppercase tracking-widest mb-3 flex items-center gap-2">
+            <CheckCircle size={16} className="text-green-400" /> Dernières Livraisons
+          </h2>
+          {recentArchives.length === 0 ? (
+            <p className="text-cyber-muted text-xs text-center py-6">Aucune livraison encore</p>
+          ) : (
+            <div className="space-y-2">
+              {recentArchives.map(a => (
+                <div key={a.id} className="flex justify-between items-center p-2.5 bg-black/20 rounded-lg border border-cyber-border/20">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{a.title}</p>
+                    <p className="text-xs text-cyber-muted">{a.archivedAt ? new Date(a.archivedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}</p>
+                  </div>
+                  <span className="font-mono text-green-400 text-sm font-bold">{formatAmount(a.price || 0)}</span>
+                </div>
+              ))}
+              <button onClick={() => navigate('/app/archives')} className="w-full text-xs text-cyber-muted hover:text-cyber-neon flex items-center justify-center gap-1 mt-2 transition-colors">
+                Voir toutes les archives <ArrowUpRight size={12} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
