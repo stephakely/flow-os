@@ -1,335 +1,243 @@
 import React, { useState, useEffect } from 'react';
 import { api, exportBackup, importBackup } from '../lib/apiService';
-import { Download, Upload, Trash2, Save, RefreshCw, Database, Shield, Sliders, BookOpen, Plus } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Download, Upload, Trash2, Save, RefreshCw, Database, Shield, Sliders, Building, Phone, Mail, FileText, CreditCard } from 'lucide-react';
 
 export default function Settings({ user }) {
-  const [studioName, setStudioName] = useState('');
-  const [currency, setCurrency] = useState('EUR');
+  const [settings, setSettings] = useState(null);
   const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [adminPin, setAdminPin] = useState('');
   const [changingPin, setChangingPin] = useState(false);
+  const [adminPin, setAdminPin] = useState('');
   const [pinSaved, setPinSaved] = useState(false);
-  const [faqs, setFaqs] = useState([]);
-  const [newFaq, setNewFaq] = useState({ q: '', a: '' });
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useEffect(() => { loadSettings(); }, []);
 
   const loadSettings = async () => {
-    try {
-      const settings = await api.getSettings();
-      setStudioName(settings.studioName || '');
-      setCurrency(settings.currency || 'EUR');
-      setFaqs(await api.getFAQ());
-    } catch (e) {
-      console.error('Error loading settings:', e);
-    } finally {
-      setLoading(false);
-    }
+    const s = await api.getSettings();
+    setSettings(s);
   };
 
-  const handleSaveSettings = async () => {
-    await api.updateSettings({ studioName, currency });
+  const update = (key, val) => setSettings(prev => ({ ...prev, [key]: val }));
+
+  const handleSave = async () => {
+    await api.updateSettings(settings);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const handleSavePin = async () => {
-    if (!adminPin || adminPin.length !== 4 || !/^\d{4}$/.test(adminPin)) {
-      alert('Le PIN doit être composé de 4 chiffres.');
+    if (adminPin.length !== 4 || !/^\d{4}$/.test(adminPin)) {
+      alert('Le PIN doit être 4 chiffres.');
       return;
     }
-    const team = await api.getTeam();
-    const adminUser = team.find(t => t.id === user.id);
-    if (!adminUser) {
-      alert('Utilisateur introuvable.');
-      return;
+    const lsdb = JSON.parse(localStorage.getItem('flow_os_db_v2') || '{}');
+    const team = lsdb.team || [];
+    const idx = team.findIndex(t => t.id === user.id);
+    if (idx >= 0) {
+      team[idx].pin = adminPin;
+      lsdb.team = team;
+      localStorage.setItem('flow_os_db_v2', JSON.stringify(lsdb));
+      await api.updateTeam({ ...team[idx] });
     }
-    await api.updateTeam({ ...adminUser, pin: adminPin });
     setPinSaved(true);
     setAdminPin('');
     setTimeout(() => { setPinSaved(false); setChangingPin(false); }, 2000);
   };
 
   const handleExport = async () => {
-    try {
-      await exportBackup();
-    } catch (e) {
-      alert('Erreur lors de l\'export.');
-    }
+    try { await exportBackup(); } catch (e) { alert('Erreur export.'); }
   };
 
-  const handleImport = async (e) => {
+  const handleImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const ok = await importBackup(evt.target.result);
-      if (ok) {
-        alert('✅ Backup importé avec succès. L\'application va recharger.');
-        window.location.reload();
-      } else {
-        alert('❌ Erreur lors de l\'import (format non reconnu).');
-      }
+      if (ok) { alert('✅ Backup restauré.'); window.location.reload(); }
+      else alert('❌ Format invalide.');
     };
     reader.readAsText(file);
   };
 
-  const handleWipeDB = async () => {
-    if (confirm('⚠️ ATTENTION: Ceci va supprimer TOUTES les données. Cette action est IRRÉVERSIBLE.')) {
-      if (confirm('Dernière confirmation : Continuer ?')) {
-        localStorage.removeItem('flow_os_user');
-        alert('Base de données réinitialisée. L\'application va redémarrer.');
+  const handleWipe = () => {
+    if (confirm('⚠️ EFFACER TOUTES LES DONNÉES — action irréversible. Continuer ?')) {
+      if (confirm('Dernière confirmation ?')) {
+        localStorage.clear();
         window.location.reload();
       }
     }
   };
 
-  const handleClearSession = () => {
-    localStorage.removeItem('flow_os_user');
-    window.location.reload();
-  };
-
-  const handleAddFaq = async () => {
-    if (!newFaq.q || !newFaq.a) return;
-    await api.updateFAQ({ ...newFaq, id: `faq_${Date.now()}` });
-    setNewFaq({ q: '', a: '' });
-    setFaqs(await api.getFAQ());
-  };
-
-  const handleDeleteFaq = async (id) => {
-    await api.deleteFAQ(id);
-    setFaqs(await api.getFAQ());
-  };
-
-  if (user.role !== 'admin') {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-4">
-        <Shield size={48} className="text-cyber-red opacity-20" />
-        <h2 className="text-xl font-black text-cyber-red uppercase tracking-widest">Access Denied</h2>
-        <p className="text-cyber-muted text-sm font-mono max-w-xs">Required clearance level: ADMINISTRATOR. Your current credentials have been logged.</p>
-      </div>
-    );
-  }
-
-  if (loading) return (
-    <div className="text-cyber-neon animate-pulse p-8 font-mono tracking-[0.5em] text-center w-full mt-20">
-      ACCESSING ENCRYPTED CONFIG...
-    </div>
-  );
+  if (user.role !== 'admin') return <div className="p-10 text-center text-cyber-muted">⛔ Accès refusé.</div>;
+  if (!settings) return <div className="text-cyber-neon animate-pulse p-8 font-mono">CHARGEMENT...</div>;
 
   return (
-    <div className="space-y-10 pb-20 max-w-4xl mx-auto">
-      <header className="flex justify-between items-end border-b border-white/5 pb-8">
-        <div>
-          <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic">System <span className="text-cyber-neon">Settings</span></h1>
-          <p className="text-cyber-muted tracking-[0.3em] font-mono text-[10px] uppercase mt-2">Configuration & Data Shield</p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1 bg-cyber-neon/10 border border-cyber-neon/20 rounded-full">
-            <Database size={12} className="text-cyber-neon" />
-            <span className="text-[9px] font-black text-cyber-neon uppercase tracking-widest">Cloud Node Synced</span>
-        </div>
+    <div className="space-y-6 animate-fade-in max-w-2xl pb-10">
+      <header>
+        <h1 className="text-3xl font-bold text-white">Paramètres <span className="text-cyber-neon">Studio</span></h1>
+        <p className="text-cyber-muted text-sm mt-1 uppercase tracking-widest">Configuration globale de l'ERP</p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Paramètres Studio */}
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="glass-card p-8 space-y-6"
-        >
-          <h2 className="text-sm font-black text-white flex items-center gap-3 uppercase tracking-widest">
-            <Sliders size={18} className="text-cyber-neon" /> Studio Config
-          </h2>
-
-          <div className="space-y-4">
-            <div>
-              <label className="text-[10px] text-cyber-muted uppercase tracking-[0.2em] font-bold block mb-2">Studio Identity</label>
-              <input
-                type="text"
-                value={studioName}
-                onChange={e => setStudioName(e.target.value)}
-                className="input-cyber"
-                placeholder="FLOW_OS STUDIOS"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] text-cyber-muted uppercase tracking-[0.2em] font-bold block mb-2">Fiscal Currency</label>
-              <select
-                value={currency}
-                onChange={e => setCurrency(e.target.value)}
-                className="input-cyber"
-              >
-                <option value="EUR">EURO (€)</option>
-                <option value="USD">USD ($)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="MAD">MAD (DH)</option>
-                <option value="CAD">CAD (CA$)</option>
-                <option value="CHF">CHF (Fr)</option>
-              </select>
-            </div>
+      {/* Identité Studio */}
+      <div className="glass-card p-6 space-y-4">
+        <h2 className="text-base font-bold text-white border-b border-cyber-border/20 pb-2 flex items-center gap-2">
+          <Building size={16} className="text-cyber-neon" /> IDENTITÉ DU STUDIO
+        </h2>
+        <div>
+          <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Nom du Studio</label>
+          <input type="text" value={settings.studioName || ''} onChange={e => update('studioName', e.target.value)}
+            className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+            placeholder="Mon Studio Production" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1 flex items-center gap-1"><Mail size={10} /> Email</label>
+            <input type="email" value={settings.studioEmail || ''} onChange={e => update('studioEmail', e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+              placeholder="contact@studio.com" />
           </div>
-
-          <button onClick={handleSaveSettings} className="neon-button-primary w-full py-4 italic">
-            {saved ? 'SUCCESSFULLY SAVED' : 'COMMIT CHANGES'}
-          </button>
-        </motion.div>
-
-        {/* Sécurité — Changer son PIN */}
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-          className="glass-card p-8 space-y-6"
-        >
-          <h2 className="text-sm font-black text-white flex items-center gap-3 uppercase tracking-widest">
-            <Shield size={18} className="text-cyber-purple" /> Security Access
-          </h2>
-          
-          <div className="bg-black/40 p-4 rounded-xl border border-white/5">
-            <p className="text-[11px] text-cyber-muted leading-relaxed font-mono italic">
-              Updating your administrator PIN will invalidate all active biometric tokens. Ensure your 4-digit sequence is unique.
-            </p>
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1 flex items-center gap-1"><Phone size={10} /> Téléphone</label>
+            <input type="tel" value={settings.studioPhone || ''} onChange={e => update('studioPhone', e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+              placeholder="+33 6 00 00 00 00" />
           </div>
-
-          {!changingPin ? (
-            <button
-              onClick={() => setChangingPin(true)}
-              className="w-full neon-button-secondary py-4 uppercase tracking-widest text-xs"
-            >
-              Rotate Admin PIN
-            </button>
-          ) : (
-            <div className="space-y-4">
-              <input
-                type="password"
-                maxLength={4}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={adminPin}
-                onChange={e => setAdminPin(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-black/80 border border-cyber-purple/30 text-cyber-purple p-4 rounded-2xl outline-none text-center tracking-[1em] text-3xl font-black shadow-[inset_0_0_20px_rgba(188,19,254,0.1)]"
-                placeholder="0000"
-                autoFocus
-              />
-              <div className="flex gap-4">
-                <button onClick={handleSavePin} className="flex-1 neon-button-primary !border-cyber-purple !text-cyber-purple hover:!bg-cyber-purple hover:!text-white py-3">
-                  {pinSaved ? 'UPDATED' : 'CONFIRM'}
-                </button>
-                <button onClick={() => { setChangingPin(false); setAdminPin(''); }} className="flex-1 neon-button-secondary py-3">
-                  CANCEL
-                </button>
-              </div>
-            </div>
-          )}
-        </motion.div>
+        </div>
+        <div>
+          <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Adresse</label>
+          <input type="text" value={settings.studioAddress || ''} onChange={e => update('studioAddress', e.target.value)}
+            className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+            placeholder="123 Rue de la Production, 75001 Paris" />
+        </div>
+        <div>
+          <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1 flex items-center gap-1"><FileText size={10} /> SIRET / Numéro fiscal</label>
+          <input type="text" value={settings.studioSiret || ''} onChange={e => update('studioSiret', e.target.value)}
+            className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+            placeholder="123 456 789 00010" />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Data Architecture */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="glass-card p-8 space-y-6 col-span-1 md:col-span-2"
-        >
-          <h2 className="text-sm font-black text-white flex items-center gap-3 uppercase tracking-widest">
-            <Database size={18} className="text-cyber-blue" /> Data Architecture
-          </h2>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div 
-              onClick={handleExport}
-              className="p-6 bg-white/5 border border-white/5 rounded-2xl hover:border-cyber-blue/50 hover:bg-cyber-blue/10 transition-all cursor-pointer group"
-            >
-              <Download size={24} className="text-cyber-blue mb-4 group-hover:scale-110 transition-transform" />
-              <h3 className="font-black text-white uppercase tracking-tighter">Export Archive</h3>
-              <p className="text-[10px] text-cyber-muted mt-1 uppercase tracking-widest">Generate local encrypted backup</p>
-            </div>
-            
-            <label className="p-6 bg-white/5 border border-white/5 rounded-2xl border-dashed hover:border-cyber-neon/50 hover:bg-cyber-neon/10 transition-all cursor-pointer group">
-              <Upload size={24} className="text-cyber-neon mb-4 group-hover:scale-110 transition-transform" />
-              <h3 className="font-black text-white uppercase tracking-tighter">Import Protocol</h3>
-              <p className="text-[10px] text-cyber-muted mt-1 uppercase tracking-widest">Overwrite with external snapshot</p>
-              <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-            </label>
-          </div>
-        </motion.div>
-
-        {/* System Flush */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="glass-card p-8 space-y-6 border-cyber-red/20 shadow-neon-red"
-        >
-          <h2 className="text-sm font-black text-cyber-red flex items-center gap-3 uppercase tracking-widest">
-            <Trash2 size={18} /> Danger Zone
-          </h2>
-          
-          <p className="text-[10px] text-cyber-muted font-mono leading-relaxed">
-            Performing a total wipe will erase all cloud records and local caches. This action is final and irrecoverable.
-          </p>
-
-          <button onClick={handleWipeDB} className="w-full py-4 text-[10px] font-black uppercase tracking-widest bg-cyber-red/10 text-cyber-red border border-cyber-red/30 rounded-xl hover:bg-cyber-red hover:text-white transition-all">
-            Initiate Total Reset
-          </button>
-          
-          <button onClick={handleClearSession} className="w-full text-[9px] font-bold text-cyber-muted uppercase hover:text-white transition-colors">
-            Terminate Current Session
-          </button>
-        </motion.div>
-    </div>
-
-      {/* FAQ Knowledge Base Manager */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="glass-card p-8 space-y-6"
-      >
-        <h2 className="text-sm font-black text-white flex items-center gap-3 uppercase tracking-widest">
-          <BookOpen size={18} className="text-cyber-green" /> Knowledge Hub Manager
+      {/* Facturation */}
+      <div className="glass-card p-6 space-y-4">
+        <h2 className="text-base font-bold text-white border-b border-cyber-border/20 pb-2 flex items-center gap-2">
+          <CreditCard size={16} className="text-cyber-neon" /> FACTURATION
         </h2>
-        
-        <div className="space-y-4">
-          {faqs.map(item => (
-            <div key={item.id} className="flex justify-between items-start p-4 bg-white/5 border border-white/5 rounded-2xl group">
-              <div className="flex-1">
-                <div className="text-xs font-black text-white uppercase tracking-widest mb-1">{item.q}</div>
-                <div className="text-[11px] text-cyber-muted italic">{item.a}</div>
-              </div>
-              <button onClick={() => handleDeleteFaq(item.id)} className="text-red-500/30 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Trash2 size={16} />
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Devise</label>
+            <select value={settings.currency || 'EUR'} onChange={e => update('currency', e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none">
+              <option value="EUR">EUR (€)</option>
+              <option value="USD">USD ($)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="MAD">MAD (DH)</option>
+              <option value="CAD">CAD ($CA)</option>
+              <option value="CHF">CHF (Fr.)</option>
+              <option value="XOF">XOF (FCFA)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Préfixe Facture</label>
+            <input type="text" value={settings.invoicePrefix || 'FAC'} onChange={e => update('invoicePrefix', e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+              placeholder="FAC" />
+          </div>
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Préfixe Devis</label>
+            <input type="text" value={settings.quotePrefix || 'DEV'} onChange={e => update('quotePrefix', e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+              placeholder="DEV" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Frais Plateforme par Défaut (%)</label>
+          <input type="number" step="0.1" min="0" max="100" value={settings.defaultPlatformFee || 2} onChange={e => update('defaultPlatformFee', parseFloat(e.target.value))}
+            className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none" />
+        </div>
+        <div>
+          <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Mentions légales (pied de facture)</label>
+          <textarea value={settings.invoiceFooter || ''} onChange={e => update('invoiceFooter', e.target.value)}
+            className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none resize-none text-sm"
+            rows="2" placeholder="Ex: TVA non applicable, art. 293 B du CGI." />
+        </div>
+      </div>
+
+      {/* Bouton sauvegarde */}
+      <button onClick={handleSave} className="neon-button-primary flex items-center justify-center gap-2 w-full py-3">
+        {saved ? <><CheckMark /> Sauvegardé !</> : <><Save size={18} /> Sauvegarder les Paramètres</>}
+      </button>
+
+      {/* Sécurité */}
+      <div className="glass-card p-6 space-y-4">
+        <h2 className="text-base font-bold text-white border-b border-cyber-border/20 pb-2 flex items-center gap-2">
+          <Shield size={16} className="text-cyber-neon" /> SÉCURITÉ
+        </h2>
+        {!changingPin ? (
+          <button onClick={() => setChangingPin(true)}
+            className="w-full flex items-center justify-center gap-2 border border-cyber-border text-cyber-muted py-3 rounded-lg hover:border-cyber-neon hover:text-cyber-neon transition-colors">
+            <Shield size={16} /> Changer mon PIN Admin
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block">Nouveau PIN (4 chiffres)</label>
+            <input type="password" maxLength={4} inputMode="numeric" pattern="[0-9]*"
+              value={adminPin} onChange={e => setAdminPin(e.target.value.replace(/\D/g, ''))}
+              autoFocus
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none text-center tracking-[1em] text-2xl"
+              placeholder="••••" />
+            <div className="flex gap-3">
+              <button onClick={handleSavePin} className="flex-1 neon-button-primary py-2 text-sm">
+                {pinSaved ? '✅ PIN mis à jour !' : 'Valider'}
+              </button>
+              <button onClick={() => { setChangingPin(false); setAdminPin(''); }} className="flex-1 neon-button-secondary py-2 text-sm">
+                Annuler
               </button>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+      </div>
 
-        <div className="p-6 bg-cyber-neon/5 rounded-3xl space-y-4 border border-cyber-neon/10">
-           <div className="text-[10px] text-cyber-neon uppercase font-black tracking-widest">New Protocol Entry</div>
-           <input 
-              type="text" 
-              value={newFaq.q}
-              onChange={e => setNewFaq({...newFaq, q: e.target.value})}
-              placeholder="Question (ex: Comment préparer les rushs ?)" 
-              className="input-cyber" 
-           />
-           <textarea 
-              value={newFaq.a}
-              onChange={e => setNewFaq({...newFaq, a: e.target.value})}
-              placeholder="Answer / Guideline..." 
-              className="input-cyber h-20 resize-none" 
-           />
-           <button onClick={handleAddFaq} className="w-full neon-button-primary !py-3 flex items-center justify-center gap-2">
-              <Plus size={16} /> Deploy Knowledge Node
-           </button>
+      {/* Data Center */}
+      <div className="glass-card p-6 space-y-4">
+        <h2 className="text-base font-bold text-white border-b border-cyber-border/20 pb-2 flex items-center gap-2">
+          <Database size={16} className="text-cyber-neon" /> DONNÉES
+        </h2>
+        <div className="grid grid-cols-2 gap-4">
+          <button onClick={handleExport} className="neon-button-primary flex items-center justify-center gap-2 h-16 text-sm">
+            <Download size={18} />
+            <div className="text-left">
+              <div className="font-bold">Export JSON</div>
+              <div className="text-xs opacity-70">Backup complet</div>
+            </div>
+          </button>
+          <label className="neon-button-secondary flex items-center justify-center gap-2 h-16 cursor-pointer border-dashed text-sm">
+            <Upload size={18} />
+            <div className="text-left">
+              <div className="font-bold">Import JSON</div>
+              <div className="text-xs opacity-70">Restaurer</div>
+            </div>
+            <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+          </label>
         </div>
-      </motion.div>
+      </div>
+
+      {/* Session */}
+      <div className="glass-card p-5">
+        <h2 className="text-sm font-bold text-yellow-400 border-b border-yellow-500/20 pb-2 mb-3 uppercase tracking-widest">SESSION</h2>
+        <button onClick={() => { localStorage.removeItem('flow_os_user'); window.location.reload(); }}
+          className="w-full flex items-center justify-center gap-2 border border-yellow-500/30 text-yellow-400 py-3 rounded-lg hover:bg-yellow-500/10 transition-colors text-sm">
+          <RefreshCw size={16} /> Se Déconnecter (re-login)
+        </button>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="glass-card p-5 border border-red-500/30">
+        <h2 className="text-sm font-bold text-red-500 border-b border-red-500/20 pb-2 mb-3 uppercase tracking-widest">DANGER ZONE</h2>
+        <button onClick={handleWipe}
+          className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/50 text-red-400 py-3 rounded-lg hover:bg-red-500/20 transition-colors text-sm">
+          <Trash2 size={16} /> EFFACER TOUTES LES DONNÉES
+        </button>
+      </div>
     </div>
   );
 }
