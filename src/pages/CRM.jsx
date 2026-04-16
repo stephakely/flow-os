@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, formatAmount } from '../lib/apiService';
-import { Star, MessageCircle, ArrowRight, Plus, X, Zap, Rocket } from 'lucide-react';
+import { Star, MessageCircle, ArrowRight, Plus, X, Zap, Rocket, Palette } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const stages = [
   { id: 'contact', title: '1. Nouveaux Contacts', color: 'border-blue-500/50', text: 'text-blue-400', bg: 'bg-blue-500' },
@@ -16,6 +17,8 @@ export default function CRM({ user }) {
   const [team, setTeam] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(null); // lead à convertir
+  const [showBrandKitModal, setShowBrandKitModal] = useState(null); // client ID
+  const [activeTab, setActiveTab] = useState('pipeline');
 
   // Formulaire nouveau lead
   const [form, setForm] = useState({
@@ -147,19 +150,61 @@ export default function CRM({ user }) {
     );
   };
 
+  const [brandKitForm, setBrandKitForm] = useState({ colors: '', fonts: '', logos: '' });
+
+  const loadBrandKit = async (clientId) => {
+    const kit = await api.getBrandKit(clientId);
+    setBrandKitForm({
+      colors: kit.colors?.join(', ') || '',
+      fonts: kit.fonts?.join(', ') || '',
+      logos: kit.logos?.join(', ') || ''
+    });
+    setShowBrandKitModal(clientId);
+  };
+
+  const handleSaveBrandKit = async (e) => {
+    e.preventDefault();
+    await api.updateBrandKit({
+      clientId: showBrandKitModal,
+      colors: brandKitForm.colors.split(',').map(c => c.trim()).filter(c => c),
+      fonts: brandKitForm.fonts.split(',').map(f => f.trim()).filter(f => f),
+      logos: brandKitForm.logos.split(',').map(l => l.trim()).filter(l => l)
+    });
+    setShowBrandKitModal(null);
+    alert('Brand Kit mis à jour !');
+  };
+
   return (
     <div className="space-y-6 animate-fade-in h-[calc(100vh-6rem)] flex flex-col">
       <header className="flex justify-between items-center shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold text-cyber-text">CRM <span className="text-cyber-neon">Pipeline</span></h1>
-          <p className="text-cyber-muted tracking-widest mt-1 text-sm uppercase">Lead Management System ({leads.length} prospects)</p>
+        <div className="flex items-center gap-8">
+          <div>
+            <h1 className="text-3xl font-bold text-cyber-text tracking-tighter uppercase italic">CRM <span className="text-cyber-neon">Manager</span></h1>
+          </div>
+          <div className="flex bg-black/40 border border-white/10 rounded-xl p-1">
+            <button 
+              onClick={() => setActiveTab('pipeline')}
+              className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${activeTab === 'pipeline' ? 'bg-cyber-neon text-black shadow-neon' : 'text-cyber-muted hover:text-white'}`}
+            >
+              PIPELINE DEALS
+            </button>
+            <button 
+              onClick={() => setActiveTab('clients')}
+              className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${activeTab === 'clients' ? 'bg-cyber-neon text-black shadow-neon' : 'text-cyber-muted hover:text-white'}`}
+            >
+              CLIENT IDENTITY
+            </button>
+          </div>
         </div>
-        <button onClick={() => setShowModal(true)} className="neon-button-primary flex items-center gap-2">
-          <Plus size={18} /> Nouveau Prospect
-        </button>
+        {activeTab === 'pipeline' && (
+          <button onClick={() => setShowModal(true)} className="neon-button-primary flex items-center gap-2">
+            <Plus size={18} /> Nouveau Prospect
+          </button>
+        )}
       </header>
 
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+      {activeTab === 'pipeline' ? (
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex gap-6 h-full min-w-max pb-4">
           {stages.map(stage => {
             const columnLeads = leads.filter(l => l.stage === stage.id);
@@ -192,7 +237,60 @@ export default function CRM({ user }) {
             );
           })}
         </div>
-      </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pr-2 custom-scrollbar">
+          {clients.map(client => (
+            <div key={client.id} className="glass-card p-6 border-white/5 hover:border-cyber-neon/30 transition-all flex flex-col justify-between group">
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-cyber-neon/10 flex items-center justify-center text-cyber-neon border border-cyber-neon/20">
+                    <Star size={24} />
+                  </div>
+                  <span className="text-[10px] text-cyber-muted font-mono">{client.contractType || 'Par Vidéo'}</span>
+                </div>
+                <h3 className="text-xl font-black text-white italic uppercase mb-2">{client.name}</h3>
+                <p className="text-xs text-cyber-muted mb-4">{client.email}</p>
+              </div>
+              <button 
+                onClick={() => loadBrandKit(client.id)}
+                className="w-full neon-button-secondary !py-3 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest border-dashed opacity-70 group-hover:opacity-100"
+              >
+                <Palette size={14} /> Gérer le Brand Kit
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* =================== MODAL BRAND KIT =================== */}
+      {showBrandKitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card p-8 w-full max-w-md border-cyber-gold/30">
+            <h2 className="text-xl font-black text-white uppercase italic mb-6 flex items-center gap-2">
+              <Palette size={24} className="text-cyber-gold" /> Client Identity Kit
+            </h2>
+            <form onSubmit={handleSaveBrandKit} className="space-y-4">
+              <div>
+                <label className="text-[10px] text-cyber-muted uppercase font-bold block mb-1">Color Palette (Hex values, comma separated)</label>
+                <input type="text" value={brandKitForm.colors} onChange={e => setBrandKitForm({...brandKitForm, colors: e.target.value})} className="input-cyber text-cyber-gold" placeholder="#00FFAA, #000000, #FFFFFF" />
+              </div>
+              <div>
+                <label className="text-[10px] text-cyber-muted uppercase font-bold block mb-1">Brand Fonts</label>
+                <input type="text" value={brandKitForm.fonts} onChange={e => setBrandKitForm({...brandKitForm, fonts: e.target.value})} className="input-cyber" placeholder="Inter, Outfit, Roboto" />
+              </div>
+              <div>
+                <label className="text-[10px] text-cyber-muted uppercase font-bold block mb-1">Logo Assets (URLs)</label>
+                <textarea value={brandKitForm.logos} onChange={e => setBrandKitForm({...brandKitForm, logos: e.target.value})} className="input-cyber h-20 resize-none" placeholder="https://cdn/logo_white.png, ..." />
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setShowBrandKitModal(null)} className="flex-1 neon-button-secondary py-2 uppercase font-bold text-xs">Fermer</button>
+                <button type="submit" className="flex-1 neon-button-primary !border-cyber-gold !text-cyber-gold py-2 uppercase font-bold text-xs">Enregistrer</button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
 
       {/* =================== MODAL NOUVEAU LEAD =================== */}
       {showModal && (

@@ -57,6 +57,19 @@ const initialData = {
   crmLeads: [
     { id: 'L1', title: 'Clip Neon Nights', source: 'Instagram', stage: 'contact', value: 800, nextAction: 'Rappel mardi', notes: '' }
   ],
+  clientAssets: [],
+  activityLogs: [],
+  projectVersions: [],
+  brandKits: [],
+  sharedResources: [
+    { id: 'res_1', type: 'music', title: 'Cinematic Overlay', url: '#' },
+    { id: 'res_2', type: 'sfx', title: 'Deep Whoosh Pack', url: '#' },
+    { id: 'res_3', type: 'font', title: 'Outfit Bold (Agency)', url: '#' }
+  ],
+  faq: [
+    { id: 'faq_1', q: 'Comment envoyer mes fichiers ?', a: 'Utilisez le bouton "Studio Vault" dans votre dashboard pour partager des liens Google Drive ou WeTransfer.' },
+    { id: 'faq_2', q: 'Qu\'est-ce qu\'une version ?', a: 'Une version est une itération de votre vidéo. Vous pouvez la visionner et laisser des commentaires précis.' }
+  ],
   chatMessages: []
 };
 
@@ -117,20 +130,28 @@ const firestoreDelete = async (colName, id) => {
 };
 
 // ─── Unified Collection Access (Firestore + LS fallback) ─────────────────────
-const getCollection = async (colName) => {
-  if (!isFirestoreAvailable()) return getLocalCollection(colName);
+export const getCollection = async (colName) => {
+  if (!isFirestoreAvailable()) {
+    console.info(`[DAL] Using LocalStorage for ${colName} (Firestore inactive)`);
+    return getLocalCollection(colName);
+  }
+  
   try {
+    // Timeout augmenté à 10s pour éviter les faux négatifs sur "cold starts"
     const data = await Promise.race([
       firestoreGet(colName),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
     ]);
+    
+    console.info(`[DAL] Firestore synced: ${colName} (${data.length} items)`);
+    
     // Sync vers LS pour offline
     const lsdb = getLocalDB();
     lsdb[colName] = data;
     saveLocalDB(lsdb);
     return data;
   } catch (e) {
-    console.warn(`Firestore [${colName}] unavailable, using localStorage:`, e.message);
+    console.warn(`[DAL] Firestore [${colName}] fallback to LS:`, e.message);
     return getLocalCollection(colName);
   }
 };
@@ -155,6 +176,20 @@ const deleteItem = async (colName, id) => {
   }
 };
 
+const forceSetCollection = async (colName, data) => {
+  const lsdb = getLocalDB();
+  lsdb[colName] = data;
+  saveLocalDB(lsdb);
+  if (isFirestoreAvailable()) {
+    // Note: Pour une collection complète, on devrait normalement faire un batch ou écraser les items un par un
+    // Ici on sync les items existants pour simplifier
+    for (const item of data) {
+       firestoreSet(colName, item.id, item).catch(() => {});
+    }
+  }
+  window.dispatchEvent(new Event('flow-db-update'));
+};
+
 // ─── Logiques Métier ─────────────────────────────────────────────────────────
 export const computeNetNet = (price, feePct = 2) => {
   return price - (price * (feePct / 100));
@@ -176,65 +211,74 @@ const createSubscription = (colName, callback, orderByField = null) => {
       const q = orderByField
         ? query(collection(db, colName), orderBy(orderByField, 'asc'))
         : collection(db, colName);
+        
       return onSnapshot(q,
         (snap) => {
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Sync local
           const lsdb = getLocalDB();
           lsdb[colName] = data;
           saveLocalDB(lsdb);
           callback(data);
         },
         (err) => {
-          console.warn(`Firestore onSnapshot [${colName}] error, falling back:`, err.message);
+          console.error(`[DAL] Firestore onSnapshot Error [${colName}]:`, err.message);
+          // Fallback silencieux vers LS
           callback(getLocalCollection(colName));
-          // Polling fallback every 3 seconds
-          const interval = setInterval(() => callback(getLocalCollection(colName)), 3000);
-          return () => clearInterval(interval);
         }
       );
     } catch (e) {
-      console.warn(`Firestore subscription [${colName}] failed:`, e.message);
+      console.error(`[DAL] Subscription setup failed [${colName}]:`, e.message);
     }
   }
-  // LS polling fallback
+  
+  // LS polling fallback (plus lent pour économiser CPU)
   callback(getLocalCollection(colName));
-  const interval = setInterval(() => callback(getLocalCollection(colName)), 2000);
+  const interval = setInterval(() => callback(getLocalCollection(colName)), 5000);
   return () => clearInterval(interval);
 };
 
 // ─── Export API ───────────────────────────────────────────────────────────────
 export const getDB = async () => {
-  const [projects, team, clients, archives, crmLeads] = await Promise.all([
-    getCollection('projects'),
-    getCollection('team'),
-    getCollection('clients'),
-    getCollection('archives'),
-    getCollection('crmLeads'),
-  ]);
-
-  let settings = initialData.settings;
   try {
+    const results = await Promise.all([
+      getCollection('projects'),
+      getCollection('team'),
+      getCollection('clients'),
+      getCollection('archives'),
+      getCollection('crmLeads'),
+    ]);
+
+    const [projects, team, clients, archives, crmLeads] = results;
+
+    let settings = initialData.settings;
     if (isFirestoreAvailable()) {
-      const settingsDoc = await getDoc(doc(db, 'settings', 'main'));
-      if (settingsDoc.exists()) {
-        settings = settingsDoc.data();
-      } else {
-        await seedInitialData();
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'main'));
+        if (settingsDoc.exists()) {
+          settings = settingsDoc.data();
+        } else {
+          console.info('[DAL] Settings missing in Firestore, initiating first seed...');
+          await seedInitialData();
+        }
+      } catch (e) {
+        console.warn('[DAL] Settings read error:', e.message);
+        settings = getLocalDB().settings || initialData.settings;
       }
     } else {
       settings = getLocalDB().settings || initialData.settings;
     }
-  } catch (e) {
-    console.warn('Settings read error:', e.message);
-    settings = getLocalDB().settings || initialData.settings;
-  }
 
-  return { projects, team, clients, archives, crmLeads, settings };
+    return { projects, team, clients, archives, crmLeads, settings };
+  } catch (e) {
+    console.error('[DAL] Critical Boot Error:', e);
+    const ls = getLocalDB();
+    return { ...ls, settings: ls.settings || initialData.settings };
+  }
 };
 
 const seedInitialData = async () => {
-  console.log('Seeding initial data to Firestore...');
+  if (!isFirestoreAvailable()) return;
+  console.log('🌱 Seeding database sequence started...');
   try {
     await firestoreSet('settings', 'main', initialData.settings);
     for (const { id, ...rest } of initialData.team) await firestoreSet('team', id, rest);
@@ -450,4 +494,134 @@ export const api = {
   },
 
   subscribeMessages: (callback) => createSubscription('chatMessages', callback, 'timestamp'),
+
+  // ── Client Assets ──────────────────────────────────────────────────────────
+  getClientAssets: async (clientId) => {
+    const assets = await getCollection('clientAssets');
+    return assets.filter(a => a.clientId === clientId);
+  },
+
+  addClientAsset: async (asset) => {
+    const id = `asset_${Date.now()}`;
+    await setItem('clientAssets', id, { ...asset, createdAt: new Date().toISOString() });
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  deleteClientAsset: async (id) => {
+    await deleteItem('clientAssets', id);
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  subscribeClientAssets: (clientId, callback) => {
+    return createSubscription('clientAssets', (data) => {
+      callback(data.filter(a => a.clientId === clientId));
+    }, 'createdAt');
+  },
+
+  // ── Activity Logs ──────────────────────────────────────────────────────────
+  logActivity: async (log) => {
+    const id = `log_${Date.now()}`;
+    await setItem('activityLogs', id, { ...log, timestamp: new Date().toISOString() });
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  subscribeActivityLogs: (clientId, callback) => {
+    return createSubscription('activityLogs', (data) => {
+      callback(data.filter(l => l.clientId === clientId).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
+    }, 'timestamp');
+  },
+
+  // ── Project Versions ────────────────────────────────────────────────────────
+  getProjectVersions: async (projectId) => {
+    const versions = await getCollection('projectVersions');
+    return versions.filter(v => v.projectId === projectId).sort((a,b) => b.versionNumer - a.versionNumer);
+  },
+
+  addProjectVersion: async (version) => {
+    const id = `v_${Date.now()}`;
+    await setItem('projectVersions', id, { ...version, createdAt: new Date().toISOString() });
+    window.dispatchEvent(new Event('flow-db-update'));
+    // Auto-log
+    await api.logActivity({
+      clientId: version.clientId,
+      projectId: version.projectId,
+      type: 'version',
+      message: `Nouvelle version disponible : ${version.title}`
+    });
+  },
+
+  subscribeProjectVersions: (projectId, callback) => {
+    return createSubscription('projectVersions', (data) => {
+      callback(data.filter(v => v.projectId === projectId));
+    }, 'createdAt');
+  },
+
+  // ── Brand Kits & Resources ────────────────────────────────────────────────
+  getBrandKit: async (clientId) => {
+    const kits = await getCollection('brandKits');
+    return kits.find(k => k.clientId === clientId) || { colors: [], fonts: [], logos: [] };
+  },
+
+  getSharedResources: async () => {
+    return await getCollection('sharedResources');
+  },
+
+  updateBrandKit: async (kit) => {
+    await setItem('brandKits', kit.clientId, kit);
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  // ── Comments (Feedback) ──────────────────────────────────────────────────
+  addVersionComment: async (versionId, comment) => {
+    const versions = await getCollection('projectVersions');
+    const vIdx = versions.findIndex(v => v.id === versionId);
+    if (vIdx !== -1) {
+      const v = versions[vIdx];
+      const comments = v.comments || [];
+      const newComment = { 
+        ...comment, 
+        id: `c_${Date.now()}`, 
+        createdAt: new Date().toISOString(), 
+        resolved: false,
+        x: comment.x || null,
+        y: comment.y || null
+      };
+      versions[vIdx] = { ...v, comments: [...comments, newComment] };
+      await forceSetCollection('projectVersions', versions);
+      
+      // Log feed
+      await api.logActivity({
+        clientId: v.clientId,
+        projectId: v.projectId,
+        type: 'comment',
+        message: `Nouveau commentaire sur ${v.title} à ${newComment.timecode || '00:00'}`
+      });
+    }
+  },
+
+  resolveComment: async (versionId, commentId) => {
+    const versions = await getCollection('projectVersions');
+    const vIdx = versions.findIndex(v => v.id === versionId);
+    if (vIdx !== -1) {
+      const v = versions[vIdx];
+      const comments = v.comments.map(c => c.id === commentId ? { ...c, resolved: true } : c);
+      versions[vIdx] = { ...v, comments };
+      await forceSetCollection('projectVersions', versions);
+    }
+  },
+
+  // ── FAQ ──────────────────────────────────────────────────────────────────
+  getFAQ: async () => {
+    return await getCollection('faq');
+  },
+
+  updateFAQ: async (item) => {
+    await setItem('faq', item.id, item);
+    window.dispatchEvent(new Event('flow-db-update'));
+  },
+
+  deleteFAQ: async (id) => {
+    await deleteItem('faq', id);
+    window.dispatchEvent(new Event('flow-db-update'));
+  }
 };

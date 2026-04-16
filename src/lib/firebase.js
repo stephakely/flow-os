@@ -18,16 +18,17 @@ const firebaseConfig = {
 let app, auth, db, googleProvider, analytics;
 
 try {
-  // Try to initialize only if keys are replaced or partially replaced (it might crash if completely fake)
-  if(firebaseConfig.apiKey !== "REPLACE_ME_API_KEY") {
+  if(firebaseConfig.apiKey && firebaseConfig.apiKey !== "REPLACE_ME_API_KEY") {
     app = initializeApp(firebaseConfig);
-    analytics = getAnalytics(app);
     auth = getAuth(app);
-    db = getFirestore(app);
+    // On supporte le nom de base de donnée custom (ex: flowos200220) si fourni, sinon (default)
+    const dbName = import.meta.env?.VITE_FIREBASE_DB_NAME || "(default)";
+    db = getFirestore(app, dbName);
     googleProvider = new GoogleAuthProvider();
+    console.log(`🚀 Firebase initialized [Project: ${firebaseConfig.projectId}] [DB: ${dbName}]`);
   }
 } catch (e) {
-  console.warn("⚠️ Configuration Firebase manquante ou incorrecte.", e);
+  console.error("❌ Configuration Firebase critique:", e);
 }
 
 // Fonction de secours (mock) si Firebase n'est pas encore configuré (ex. pour te laisser tester l'UI en attendant !)

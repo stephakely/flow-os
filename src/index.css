@@ -1,66 +1,79 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-primary: #020202;
+  --bg-secondary: rgba(255, 255, 255, 0.05);
+  --text-primary: #f0f0f0;
+  --text-muted: #888888;
+  --cyber-neon: #00FFAA;
+  --cyber-border: rgba(255, 255, 255, 0.1);
+  --glass-bg: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='light'] {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: rgba(0, 0, 0, 0.05);
+  --text-primary: #1A1A1A;
+  --text-muted: #666666;
+  --cyber-neon: #000000;
+  --cyber-border: rgba(0, 0, 0, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.4);
+}
+
 @layer base {
   body {
-    @apply bg-cyber-dark text-cyber-text font-sans antialiased overflow-x-hidden;
+    @apply font-sans antialiased overflow-x-hidden transition-colors duration-500;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
     background-image: 
-      radial-gradient(circle at 15% 50%, rgba(0, 242, 255, 0.03), transparent 25%),
-      radial-gradient(circle at 85% 30%, rgba(0, 242, 255, 0.03), transparent 25%);
+      radial-gradient(circle at 15% 50%, rgba(0, 255, 170, 0.03), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(0, 255, 170, 0.03), transparent 25%);
   }
 
-  /* Custom Scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-cyber-border rounded-full hover:bg-cyber-neon;
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { 
+    background: var(--cyber-border);
+    @apply rounded-full hover:bg-cyber-neon/50 transition-colors;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-cyber-card backdrop-blur-glass border border-cyber-border rounded-xl shadow-lg;
+    background: var(--glass-bg);
+    @apply backdrop-blur-glass border border-white/5 rounded-2xl shadow-glass transition-all duration-300;
+    border-color: var(--cyber-border);
   }
   
-  .neon-input {
-    @apply w-full bg-gray-900/50 border border-cyber-border/50 text-cyber-text px-4 py-2 rounded-lg 
-    focus:outline-none focus:border-cyber-neon focus:shadow-neon transition-all duration-300 placeholder-cyber-muted;
+  .glass-card:hover {
+    @apply border-cyber-neon/30;
+    background: var(--bg-secondary);
   }
 
-  .neon-button {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-300 transform active:scale-95;
-  }
   .neon-button-primary {
-    @apply neon-button bg-cyber-neon/10 border border-cyber-neon text-cyber-neon hover:shadow-neon-hover hover:bg-cyber-neon/20;
+    @apply relative px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-sm transition-all duration-300 hover:shadow-neon-strong active:scale-95;
+    background: var(--bg-primary);
+    color: var(--cyber-neon);
+    border: 1px solid var(--cyber-neon);
   }
+  .neon-button-primary:hover {
+    background: var(--cyber-neon);
+    color: var(--bg-primary);
+  }
+
   .neon-button-secondary {
-    @apply neon-button bg-gray-800/50 border border-gray-600 text-gray-300 hover:border-gray-400 hover:text-white;
-  }
-  .neon-button-danger {
-    @apply neon-button bg-red-500/10 border border-red-500 text-red-500 hover:bg-red-500/20 hover:shadow-pulse;
+    @apply px-6 py-2 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95;
+    background: var(--bg-secondary);
+    border: 1px solid var(--cyber-border);
+    color: var(--text-primary);
   }
 
-  /* Pulse UI for Emergency */
-  .emergency-pulse {
-    animation: pulse-border 2s infinite;
+  .input-cyber {
+    @apply w-full px-4 py-3 rounded-xl outline-none transition-all duration-300;
+    background: var(--bg-primary);
+    border: 1px solid var(--cyber-border);
+    color: var(--text-primary);
   }
-}
-
-@keyframes pulse-border {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
-
-/* Watermark text selection */
-::selection {
-  @apply bg-cyber-neon/30 text-white;
 }
