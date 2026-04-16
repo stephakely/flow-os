@@ -1,10 +1,14 @@
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Film, Users, BookOpen, Settings as SettingsIcon, Briefcase, Clock, Shield, Sun, Moon } from 'lucide-react';
+import {
+  LayoutDashboard, Film, Users, BookOpen, Settings as SettingsIcon,
+  Briefcase, Shield, Sun, Moon, FileText, TrendingUp, Calendar,
+  LogOut, ChevronRight
+} from 'lucide-react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { getDB } from './lib/apiService';
-// Ultimate Version 1.0.1 - Force Refresh
+import { motion, AnimatePresence } from 'framer-motion';
 
-// Vues Placholders et Nouvelles Vues
 import Dashboard from './pages/Dashboard';
 import Production from './pages/Production';
 import CRM from './pages/CRM';
@@ -16,10 +20,30 @@ import EmailLogin from './pages/EmailLogin';
 import EditorDashboard from './pages/EditorDashboard';
 import ClientDashboard from './pages/ClientDashboard';
 import AccessControl from './pages/AccessControl';
+import Devis from './pages/Devis';
+import Finances from './pages/Finances';
+import Planning from './pages/Planning';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import MessengerWidget from './components/MessengerWidget';
 
-import { motion, AnimatePresence } from 'framer-motion';
+const ALL_LINKS = [
+  // Admin
+  { name: 'Dashboard', icon: LayoutDashboard, path: '/app', roles: ['admin'], exact: true },
+  { name: 'Production', icon: Film, path: '/app/production', roles: ['admin'] },
+  { name: 'CRM', icon: Briefcase, path: '/app/crm', roles: ['admin'] },
+  { name: 'Devis', icon: FileText, path: '/app/devis', roles: ['admin'] },
+  { name: 'Finances', icon: TrendingUp, path: '/app/finances', roles: ['admin'] },
+  { name: 'Planning', icon: Calendar, path: '/app/planning', roles: ['admin'] },
+  { name: 'Équipe', icon: Users, path: '/app/team', roles: ['admin'] },
+  { name: 'Archives', icon: BookOpen, path: '/app/archives', roles: ['admin'] },
+  { name: 'Accès & Sécu.', icon: Shield, path: '/app/access', roles: ['admin'] },
+  { name: 'Paramètres', icon: SettingsIcon, path: '/app/settings', roles: ['admin'] },
+  // Editor
+  { name: 'Mon Espace', icon: LayoutDashboard, path: '/app', roles: ['editor'], exact: true },
+  { name: 'Planning', icon: Calendar, path: '/app/planning', roles: ['editor'] },
+  // Client
+  { name: 'Mes Projets', icon: LayoutDashboard, path: '/app', roles: ['client'], exact: true },
+];
 
 const RoleBasedIndex = ({ user }) => {
   if (user.role === 'admin') return <Dashboard user={user} />;
@@ -27,77 +51,94 @@ const RoleBasedIndex = ({ user }) => {
   return <ClientDashboard user={user} />;
 };
 
+const ThemeToggle = () => {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button
+      onClick={toggleTheme}
+      className="w-full h-9 rounded-xl border border-cyber-border/20 bg-white/5 flex items-center justify-between px-3 text-cyber-muted hover:text-white transition-all group"
+    >
+      <span className="text-[9px] font-black uppercase tracking-widest">
+        {theme === 'dark' ? 'Mode Nuit' : 'Mode Jour'}
+      </span>
+      {theme === 'dark'
+        ? <Moon size={13} className="group-hover:rotate-12 transition-transform" />
+        : <Sun size={13} className="group-hover:scale-110 transition-transform" />}
+    </button>
+  );
+};
+
 const Sidebar = ({ onLogout, user }) => {
   const location = useLocation();
   const navigate = useNavigate();
-
-  const allLinks = [
-    { name: 'Vue d\'Ensemble', icon: LayoutDashboard, path: '/app', roles: ['admin'] },
-    { name: 'Mon Espace', icon: Film, path: '/app', roles: ['editor'] },
-    { name: 'Mes Projets', icon: LayoutDashboard, path: '/app', roles: ['client'] },
-    { name: 'CRM', icon: Briefcase, path: '/app/crm', roles: ['admin'] },
-    { name: 'Production', icon: Film, path: '/app/production', roles: ['admin'] },
-    { name: 'Équipe', icon: Users, path: '/app/team', roles: ['admin'] },
-    { name: 'Accès & Sécurité', icon: Shield, path: '/app/access', roles: ['admin'] },
-    { name: 'Archives', icon: BookOpen, path: '/app/archives', roles: ['admin'] },
-    { name: 'Paramètres', icon: SettingsIcon, path: '/app/settings', roles: ['admin'] },
-  ];
+  const { theme } = useTheme();
 
   const userRole = user?.role || 'client';
-  const links = allLinks.filter(link => link.roles.includes(userRole));
+  const links = ALL_LINKS.filter(l => l.roles.includes(userRole));
+
+  const isActive = (link) =>
+    link.exact ? location.pathname === link.path : location.pathname.startsWith(link.path) && link.path !== '/app';
+
+  const activeLink = links.find(l => isActive(l)) || (location.pathname === '/app' ? links[0] : null);
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ x: -100, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className="w-64 h-screen border-r border-cyber-border bg-cyber-card flex flex-col backdrop-blur-md relative z-10"
+      className="w-56 h-screen border-r border-cyber-border bg-cyber-card flex flex-col backdrop-blur-md relative z-10 shrink-0"
     >
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-cyber-neon tracking-tighter flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-cyber-neon shadow-neon animate-pulse"></div>
-          FLOW_OS
-        </h1>
-        <div className="mt-3 flex flex-col gap-1">
-          <span className="text-[10px] text-cyber-muted uppercase tracking-[0.2em] font-bold">{user?.name}</span>
-          <span className="text-[9px] text-cyber-neon/50 uppercase tracking-widest bg-cyber-neon/5 w-fit px-2 py-0.5 rounded border border-cyber-neon/10">
+      {/* Logo */}
+      <div className="px-5 pt-6 pb-4 border-b border-cyber-border/20">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-cyber-neon shadow-neon animate-pulse" />
+          <h1 className="text-xl font-black text-cyber-neon tracking-tighter">FLOW_OS</h1>
+        </div>
+        <div className="mt-3">
+          <p className="text-[10px] font-bold text-white uppercase tracking-widest truncate">{user?.name}</p>
+          <span className="text-[8px] text-cyber-neon/60 uppercase tracking-[0.2em] bg-cyber-neon/5 px-1.5 py-0.5 rounded border border-cyber-neon/10 mt-1 inline-block">
             {userRole}
           </span>
         </div>
       </div>
-      
-      <nav className="flex-1 p-4 space-y-1">
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto custom-scrollbar">
         {links.map((link, idx) => {
-          const isActive = location.pathname === link.path;
+          const active = activeLink === link || (link.exact && location.pathname === '/app' && idx === 0 && !links.some(l => !l.exact && location.pathname.startsWith(l.path)));
+          const trueActive = location.pathname === link.path || (!link.exact && location.pathname.startsWith(link.path + '/'));
+          
           return (
             <button
               key={`${link.path}-${idx}`}
               onClick={() => navigate(link.path)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative group overflow-hidden ${
-                isActive 
-                  ? 'text-cyber-neon' 
-                  : 'text-cyber-muted hover:text-white'
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 relative group ${
+                trueActive
+                  ? 'text-cyber-neon bg-cyber-neon/10'
+                  : 'text-cyber-muted hover:text-white hover:bg-white/5'
               }`}
             >
-              {isActive && (
-                <motion.div 
-                  layoutId="active-link"
-                  className="absolute inset-0 bg-cyber-neon/10 border-r-2 border-cyber-neon z-0"
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              {trueActive && (
+                <motion.div
+                  layoutId="active-sidebar"
+                  className="absolute inset-0 bg-cyber-neon/10 border-l-2 border-cyber-neon rounded-xl"
+                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                 />
               )}
-              <link.icon size={18} className="relative z-10" />
-              <span className="font-semibold text-sm relative z-10">{link.name}</span>
+              <link.icon size={16} className="relative z-10 shrink-0" />
+              <span className="relative z-10 truncate text-xs">{link.name}</span>
             </button>
-          )
+          );
         })}
       </nav>
 
-      <div className="p-4 border-t border-cyber-border/30 space-y-2">
+      {/* Footer */}
+      <div className="px-3 pb-4 pt-2 border-t border-cyber-border/20 space-y-2">
         <ThemeToggle />
-        <button 
+        <button
           onClick={onLogout}
-          className="w-full neon-button-secondary text-xs flex items-center justify-center gap-2"
+          className="w-full h-9 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-2 px-3 text-red-400/70 hover:text-red-400 hover:border-red-500/40 transition-all text-xs font-semibold"
         >
+          <LogOut size={13} />
           Déconnexion
         </button>
       </div>
@@ -105,42 +146,29 @@ const Sidebar = ({ onLogout, user }) => {
   );
 };
 
-const ThemeToggle = () => {
-  const { theme, toggleTheme } = useTheme();
-  return (
-    <button 
-      onClick={toggleTheme}
-      className="w-full h-10 rounded-xl border border-cyber-border/30 bg-white/5 flex items-center justify-between px-4 text-cyber-muted hover:text-white transition-all group overflow-hidden"
-    >
-      <span className="text-[10px] font-black uppercase tracking-widest">
-        {theme === 'dark' ? 'Neural Night' : 'Studio Light'}
-      </span>
-      {theme === 'dark' ? <Moon size={14} className="group-hover:rotate-12 transition-transform" /> : <Sun size={14} className="group-hover:scale-110 transition-transform" />}
-    </button>
-  );
-};
-
-
-
 const AppLayout = ({ user, onLogout }) => {
   const location = useLocation();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-grid-cyber">
+    <div className="flex h-screen overflow-hidden bg-cyber-dark">
       <Sidebar onLogout={onLogout} user={user} />
-      <main className="flex-1 overflow-y-auto p-8 relative z-0">
+      <main className="flex-1 overflow-y-auto p-6 xl:p-8 relative z-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25 }}
+            className="min-h-full"
           >
             <Routes location={location} key={location.pathname}>
               <Route index element={<RoleBasedIndex user={user} />} />
               <Route path="/production" element={<Production user={user} />} />
               <Route path="/crm" element={<CRM user={user} />} />
+              <Route path="/devis" element={<Devis user={user} />} />
+              <Route path="/finances" element={<Finances user={user} />} />
+              <Route path="/planning" element={<Planning user={user} />} />
               <Route path="/team" element={<Team user={user} />} />
               <Route path="/access" element={<AccessControl user={user} />} />
               <Route path="/archives" element={<Archives user={user} />} />
@@ -150,7 +178,84 @@ const AppLayout = ({ user, onLogout }) => {
           </motion.div>
         </AnimatePresence>
       </main>
-      <MessengerWidget user={user} />
+      {user.role !== 'client' && <MessengerWidget user={user} />}
+    </div>
+  );
+};
+
+// ── Écran de premier lancement (aucun accès créé) ───────────────────────────
+const FirstLaunchScreen = ({ onSetup }) => {
+  const [adminName, setAdminName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPin, setAdminPin] = useState('');
+  const [studioName, setStudioName] = useState('');
+  const [step, setStep] = useState(1);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (adminPin.length !== 4 || !/^\d{4}$/.test(adminPin)) {
+      alert('Le PIN doit être exactement 4 chiffres.');
+      return;
+    }
+    onSetup({ adminName, adminEmail, adminPin, studioName });
+  };
+
+  return (
+    <div className="h-screen bg-cyber-dark flex items-center justify-center relative overflow-hidden">
+      <div className="absolute inset-0 bg-grid-cyber opacity-10" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="glass-card p-10 w-full max-w-md mx-4 border border-cyber-neon/30 shadow-[0_0_80px_-20px_rgba(0,255,170,0.3)] relative z-10"
+      >
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="w-3 h-3 rounded-full bg-cyber-neon shadow-neon animate-pulse" />
+            <h1 className="text-2xl font-black text-cyber-neon tracking-tighter">FLOW_OS</h1>
+          </div>
+          <h2 className="text-white font-bold text-xl">Configuration Initiale</h2>
+          <p className="text-cyber-muted text-sm mt-2">Créez votre compte administrateur pour commencer</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Nom du Studio *</label>
+            <input
+              required type="text" value={studioName} onChange={e => setStudioName(e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+              placeholder="Ex: Studio Visuel Paris"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Votre Nom *</label>
+            <input
+              required type="text" value={adminName} onChange={e => setAdminName(e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+              placeholder="Ex: Jean Dupont"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">Email Admin *</label>
+            <input
+              required type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none"
+              placeholder="admin@votrestudio.com"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-cyber-muted uppercase tracking-widest block mb-1">PIN (4 chiffres) *</label>
+            <input
+              required type="password" maxLength={4} inputMode="numeric" pattern="[0-9]*"
+              value={adminPin} onChange={e => setAdminPin(e.target.value.replace(/\D/g, ''))}
+              className="w-full bg-black/50 border border-cyber-border text-white p-3 rounded-lg focus:border-cyber-neon outline-none text-center tracking-[1em] text-xl"
+              placeholder="••••"
+            />
+          </div>
+          <button type="submit" className="w-full neon-button-primary py-3 uppercase tracking-widest font-bold mt-2">
+            Lancer FLOW_OS →
+          </button>
+        </form>
+      </motion.div>
     </div>
   );
 };
@@ -159,19 +264,52 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [verifiedEmail, setVerifiedEmail] = useState(null);
+  const [isFirstLaunch, setIsFirstLaunch] = useState(false);
 
   useEffect(() => {
-    // BOOT INSTANTANÉ - localStorage uniquement, Firestore en arrière-plan
+    // BOOT INSTANTANÉ - localStorage only
     try {
       const savedUser = localStorage.getItem('flow_os_user');
       if (savedUser) setUser(JSON.parse(savedUser));
     } catch (e) {
       localStorage.removeItem('flow_os_user');
     }
-    // Firestore sync en arrière-plan (ne bloque jamais le boot)
+
+    // Vérifier si c'est le premier lancement (aucun compte admin)
+    const lsdb = JSON.parse(localStorage.getItem('flow_os_db_v2') || '{}');
+    const hasAdmin = (lsdb.team || []).some(m => m.role === 'admin');
+    if (!hasAdmin) setIsFirstLaunch(true);
+
+    // Firestore sync en arrière-plan
     getDB().catch(console.error);
     setLoading(false);
   }, []);
+
+  const handleFirstLaunchSetup = async (data) => {
+    const { adminName, adminEmail, adminPin, studioName } = data;
+    const lsdb = JSON.parse(localStorage.getItem('flow_os_db_v2') || '{}');
+
+    const adminId = `admin_${Date.now()}`;
+    const adminUser = {
+      id: adminId,
+      name: adminName,
+      email: adminEmail.trim().toLowerCase(),
+      pin: adminPin,
+      role: 'admin',
+      totalEarned: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    if (!lsdb.team) lsdb.team = [];
+    lsdb.team.push(adminUser);
+    if (!lsdb.settings) lsdb.settings = {};
+    lsdb.settings.studioName = studioName;
+    lsdb.settings.studioEmail = adminEmail;
+    localStorage.setItem('flow_os_db_v2', JSON.stringify(lsdb));
+
+    setIsFirstLaunch(false);
+    handleLogin(adminUser);
+  };
 
   const handleLogin = (userObj) => {
     localStorage.setItem('flow_os_user', JSON.stringify(userObj));
@@ -185,25 +323,27 @@ export default function App() {
   };
 
   if (loading) return (
-    <div className="h-screen bg-cyber-dark flex flex-col items-center justify-center font-mono relative overflow-hidden">
-      <div className="absolute inset-0 bg-grid-cyber opacity-20" />
-      <motion.div 
-        animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="text-cyber-neon text-4xl font-bold tracking-[0.5em] z-10"
+    <div className="h-screen bg-cyber-dark flex flex-col items-center justify-center font-mono">
+      <motion.div
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+        className="text-cyber-neon text-3xl font-black tracking-[0.4em]"
       >
         FLOW_OS
       </motion.div>
-      <div className="mt-8 w-48 h-1 bg-cyber-border rounded-full overflow-hidden z-10">
-        <motion.div 
-          animate={{ x: [-200, 200] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-          className="w-full h-full bg-cyber-neon shadow-neon"
-        />
-      </div>
-      <div className="mt-4 text-[10px] text-cyber-muted uppercase tracking-widest z-10">Initializing core systems...</div>
     </div>
   );
+
+  // Premier lancement sans admin
+  if (isFirstLaunch && !user) {
+    return (
+      <ThemeProvider>
+        <ErrorBoundary>
+          <FirstLaunchScreen onSetup={handleFirstLaunchSetup} />
+        </ErrorBoundary>
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider>
@@ -221,9 +361,8 @@ export default function App() {
                 <Navigate to="/app" />
               )
             } />
-            
             <Route path="/app/*" element={user ? <AppLayout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
-            <Route path="*" element={<Navigate to={user ? "/app" : "/login"} />} />
+            <Route path="*" element={<Navigate to={user ? '/app' : '/login'} />} />
           </Routes>
         </BrowserRouter>
       </ErrorBoundary>

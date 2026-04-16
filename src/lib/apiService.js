@@ -15,62 +15,31 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-// ─── Données initiales de démo ────────────────────────────────────────────────
+// ─── Données vides (aucune donnée démo) ────────────────────────────────────────
 const initialData = {
   settings: {
-    studioName: 'FLOW_OS STUDIOS',
+    studioName: 'MON STUDIO',
     currency: 'EUR',
-    monthlyResetDate: null
+    monthlyResetDate: null,
+    defaultPlatformFee: 2,
+    invoicePrefix: 'FAC',
+    quotePrefix: 'DEV',
+    studioAddress: '',
+    studioPhone: '',
+    studioEmail: '',
+    studioSiret: '',
+    studioLogo: ''
   },
-  clients: [
-    { id: 'C1', name: 'CyberCorp', currency: 'EUR', email: 'contact@cybercorp.com', pin: '1111', role: 'client', contractType: 'per_video' }
-  ],
-  team: [
-    { id: 'T1', name: 'Monteur Alpha', email: 'alpha@flowos.com', pin: '0000', role: 'editor', totalEarned: 0 },
-    { id: 'TAdmin', name: 'Director', email: 'director@flowos.com', pin: '4444', role: 'admin', totalEarned: 0 }
-  ],
-  projects: [
-    {
-      id: 'P1',
-      title: 'Promo Cyberpunk 2077',
-      clientId: 'C1',
-      assigneeId: 'T1',
-      price: 1500,
-      currency: 'EUR',
-      priority: 'URGENCE',
-      payment_status: 'EN ATTENTE',
-      link_rushes: '',
-      link_review: '',
-      platform_fee_pct: 2,
-      notes: 'Projet de démonstration',
-      totalTime: 0,
-      subtasks: [
-        { id: 't1', title: 'Dérushage', done: true },
-        { id: 't2', title: 'Montage Cut', done: false },
-        { id: 't3', title: 'Color Grading', done: false }
-      ],
-      timeLogs: [],
-      createdAt: new Date().toISOString()
-    }
-  ],
+  clients: [],
+  team: [],
+  projects: [],
   archives: [],
-  crmLeads: [
-    { id: 'L1', title: 'Clip Neon Nights', source: 'Instagram', stage: 'contact', value: 800, nextAction: 'Rappel mardi', notes: '' }
-  ],
-  clientAssets: [],
-  activityLogs: [],
-  projectVersions: [],
-  brandKits: [],
-  sharedResources: [
-    { id: 'res_1', type: 'music', title: 'Cinematic Overlay', url: '#' },
-    { id: 'res_2', type: 'sfx', title: 'Deep Whoosh Pack', url: '#' },
-    { id: 'res_3', type: 'font', title: 'Outfit Bold (Agency)', url: '#' }
-  ],
-  faq: [
-    { id: 'faq_1', q: 'Comment envoyer mes fichiers ?', a: 'Utilisez le bouton "Studio Vault" dans votre dashboard pour partager des liens Google Drive ou WeTransfer.' },
-    { id: 'faq_2', q: 'Qu\'est-ce qu\'une version ?', a: 'Une version est une itération de votre vidéo. Vous pouvez la visionner et laisser des commentaires précis.' }
-  ],
-  chatMessages: []
+  crmLeads: [],
+  chatMessages: [],
+  expenses: [],
+  quotes: [],
+  deliveries: [],
+  notifications: []
 };
 
 // ─── LocalStorage Fallback ────────────────────────────────────────────────────
