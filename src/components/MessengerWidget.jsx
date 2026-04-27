@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/apiService';
 import { chatApi } from '../lib/chatApiService';
-import { geminiAssistant } from '../lib/geminiService';
+import { aiAssistant } from '../lib/aiService';
 import { 
   MessageCircle, X, Send, Minimize2, Check, CheckCheck, 
   Smile, Trash2, Reply, MoreVertical, Sparkles, Bot, 
@@ -19,13 +19,19 @@ export default function MessengerWidget({ user }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [hoveredMessage, setHoveredMessage] = useState(null);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
+  const [apiKey, setApiKey] = useState(localStorage.getItem('ANTHROPIC_API_KEY') || '');
   const [showKeyInput, setShowKeyInput] = useState(!apiKey);
   
   // AI State
   const [aiInput, setAiInput] = useState('');
-  const [aiHistory, setAiHistory] = useState([]);
+  const [aiHistory, setAiHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('flow_os_ai_history') || '[]'); } catch { return []; }
+  });
   const [isAiLoading, setIsAiLoading] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('flow_os_ai_history', JSON.stringify(aiHistory));
+  }, [aiHistory]);
 
   const messagesEndRef = useRef(null);
   const aiEndRef = useRef(null);
@@ -90,9 +96,9 @@ export default function MessengerWidget({ user }) {
     setIsAiLoading(true);
     scrollToBottom(true);
 
-    const response = await geminiAssistant.generateResponse(userMsg.parts[0].text, aiHistory);
+    const response = await aiAssistant.generateResponse(userMsg.parts[0].text, aiHistory);
     
-    if (response.includes("Clé API Gemini manquante")) {
+    if (response.includes("Clé API Claude manquante")) {
       setShowKeyInput(true);
       setAiHistory(prev => prev.slice(0, -1)); // Remove user message
     } else {
@@ -104,8 +110,15 @@ export default function MessengerWidget({ user }) {
 
   const saveApiKey = (e) => {
     e.preventDefault();
-    localStorage.setItem('GEMINI_API_KEY', apiKey);
+    localStorage.setItem('ANTHROPIC_API_KEY', apiKey);
     setShowKeyInput(false);
+  };
+
+  const clearMemory = () => {
+    if (confirm('Effacer la mémoire de Claude ?')) {
+      setAiHistory([]);
+      localStorage.removeItem('flow_os_ai_history');
+    }
   };
 
   const formatTime = (iso) => {
@@ -163,10 +176,10 @@ export default function MessengerWidget({ user }) {
               </button>
               <button 
                 onClick={() => setActiveTab('ai')}
-                className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${activeTab === 'ai' ? 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.4)]' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${activeTab === 'ai' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
               >
                 <Bot size={18} />
-                Gemini AI
+                Claude AI
               </button>
               <button onClick={() => setIsOpen(false)} className="px-3 text-gray-400 hover:text-white">
                 <Minimize2 size={20} />
@@ -311,36 +324,36 @@ export default function MessengerWidget({ user }) {
               <div className="flex-1 flex flex-col overflow-hidden bg-[#0b141a]">
                 {showKeyInput ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-grid-cyber">
-                    <div className="w-16 h-16 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 mb-4 animate-pulse">
+                    <div className="w-16 h-16 rounded-2xl bg-orange-500/20 flex items-center justify-center text-orange-400 mb-4 animate-pulse">
                       <Bot size={32} />
                     </div>
                     <h3 className="text-xl font-bold text-white mb-2">Configuration requise</h3>
-                    <p className="text-sm text-gray-400 mb-6">Pour utiliser l'assistant Gemini AI, vous devez configurer votre clé API Google AI.</p>
+                    <p className="text-sm text-gray-400 mb-6">Pour utiliser l'assistant Claude AI, vous devez configurer votre clé API Anthropic.</p>
                     <form onSubmit={saveApiKey} className="w-full space-y-4">
                       <input 
                         type="password"
-                        placeholder="Entrez votre clé API Gemini"
+                        placeholder="Entrez votre clé API Anthropic"
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
-                        className="w-full bg-black/50 border border-purple-500/30 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500"
+                        className="w-full bg-black/50 border border-orange-500/30 rounded-xl px-4 py-3 text-white outline-none focus:border-orange-500"
                       />
-                      <button className="w-full py-3 bg-purple-500 text-white font-bold rounded-xl hover:bg-purple-600 transition-colors">
+                      <button className="w-full py-3 bg-orange-500 text-white font-bold rounded-xl hover:bg-orange-600 transition-colors">
                         Enregistrer la clé
                       </button>
                     </form>
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="mt-4 text-[10px] text-purple-400 hover:underline">
-                      Obtenir une clé API gratuite ici
+                    <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer" className="mt-4 text-[10px] text-orange-400 hover:underline">
+                      Obtenir une clé API Anthropic ici
                     </a>
                   </div>
                 ) : (
                   <>
                     <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                   <div className="flex gap-3 items-start">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center text-white shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-white shrink-0">
                       <Sparkles size={18} />
                     </div>
-                    <div className="bg-purple-900/20 border border-purple-500/20 p-3 rounded-2xl text-sm text-gray-200">
-                      Bonjour ! Je suis l'IA de FLOW_OS. Je peux vous aider à analyser vos projets, générer du code ou gérer votre équipe. Que voulez-vous savoir ?
+                    <div className="bg-orange-900/20 border border-orange-500/20 p-3 rounded-2xl text-sm text-gray-200">
+                      Bonjour ! Je suis Claude 3.5. Je peux analyser vos projets, générer du code ou gérer votre équipe.
                     </div>
                   </div>
 
@@ -351,25 +364,25 @@ export default function MessengerWidget({ user }) {
                       animate={{ opacity: 1, scale: 1 }}
                       className={`flex gap-3 items-start ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 ${msg.role === 'user' ? 'bg-cyber-neon text-black' : 'bg-purple-500'}`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 ${msg.role === 'user' ? 'bg-cyber-neon text-black' : 'bg-orange-500'}`}>
                         {msg.role === 'user' ? <MessageCircle size={18}/> : <Sparkles size={18} />}
                       </div>
                       <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
                         msg.role === 'user' 
                           ? 'bg-cyber-neon/10 border border-cyber-neon/20 text-white' 
-                          : 'bg-purple-900/20 border border-purple-500/30 text-gray-100'
+                          : 'bg-orange-900/20 border border-orange-500/30 text-gray-100'
                       }`}>
-                        <div className="whitespace-pre-wrap leading-relaxed">{msg.parts[0].text}</div>
+                        <div className="whitespace-pre-wrap leading-relaxed">{msg.parts ? msg.parts[0].text : ''}</div>
                       </div>
                     </motion.div>
                   ))}
                   
                   {isAiLoading && (
                     <div className="flex gap-3 items-start animate-pulse">
-                      <div className="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center text-white shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-white shrink-0">
                         <Sparkles size={18} />
                       </div>
-                      <div className="bg-purple-900/10 border border-purple-500/10 p-3 rounded-2xl text-sm text-purple-400">
+                      <div className="bg-orange-900/10 border border-orange-500/10 p-3 rounded-2xl text-sm text-orange-400">
                         Réflexion en cours...
                       </div>
                     </div>
@@ -378,24 +391,27 @@ export default function MessengerWidget({ user }) {
                   </div>
 
                   {/* AI Input */}
-                  <div className="p-4 bg-[#202c33]/50 border-t border-purple-500/20">
+                  <div className="p-4 bg-[#202c33]/50 border-t border-orange-500/20">
                     <div className="flex justify-between items-center mb-2">
-                       <span className="text-[9px] text-purple-400/50 uppercase tracking-widest font-bold">Gemini 1.5 Flash</span>
-                       <button onClick={() => setShowKeyInput(true)} className="text-[9px] text-gray-500 hover:text-white uppercase">Changer Clé</button>
+                       <span className="text-[9px] text-orange-400/80 uppercase tracking-widest font-bold">Claude 3.5 Sonnet</span>
+                       <div className="flex gap-3">
+                         <button onClick={clearMemory} className="text-[9px] text-red-500 hover:text-white uppercase">Flush RAM</button>
+                         <button onClick={() => setShowKeyInput(true)} className="text-[9px] text-gray-500 hover:text-white uppercase">Api Key</button>
+                       </div>
                     </div>
                     <form onSubmit={handleAiSend} className="flex gap-2">
                     <input
                       type="text"
                       value={aiInput}
                       onChange={e => setAiInput(e.target.value)}
-                      placeholder="Demander n'importe quoi à l'IA..."
-                      className="flex-1 bg-black/40 border border-purple-500/30 text-white rounded-xl px-4 py-2.5 text-sm outline-none focus:border-purple-500 transition-colors"
+                      placeholder="Demander n'importe quoi à Claude..."
+                      className="flex-1 bg-black/40 border border-orange-500/30 text-white rounded-xl px-4 py-2.5 text-sm outline-none focus:border-orange-500 transition-colors"
                       disabled={isAiLoading}
                     />
                     <button 
                       type="submit"
                       disabled={!aiInput.trim() || isAiLoading}
-                      className="w-11 h-11 rounded-xl bg-purple-500 text-white flex items-center justify-center shadow-lg hover:shadow-purple-500/40 transition-all disabled:opacity-50"
+                      className="w-11 h-11 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-lg hover:shadow-orange-500/40 transition-all disabled:opacity-50"
                     >
                       <Sparkles size={20} />
                     </button>

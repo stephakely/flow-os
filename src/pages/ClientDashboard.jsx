@@ -48,7 +48,7 @@ const StatusStepper = ({ subtasks = [] }) => {
   );
 };
 
-const VersionCard = ({ version }) => (
+const VersionCard = ({ version, onReview }) => (
   <motion.div 
     whileHover={{ y: -2 }}
     className="bg-black/40 border border-white/5 rounded-xl p-4 flex flex-col justify-between hover:border-cyber-neon/30 transition-all group"
@@ -129,7 +129,14 @@ const ReviewTheatre = ({ version, onClose, user }) => {
               onClick={handleVideoClick}
               className="bg-black rounded-3xl overflow-hidden border border-white/10 aspect-video shadow-2xl relative group cursor-crosshair"
             >
-               <video ref={videoRef} onPause={captureTime} controls className="w-full h-full pointer-events-none" src={version.url} />
+               <video ref={videoRef} onPause={captureTime} controls className="w-full h-full pointer-events-none relative z-10" src={version.url} />
+               
+               {/* SECURITY WATERMARK */}
+               <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center overflow-hidden opacity-10 mix-blend-overlay">
+                  <div className="text-[10vw] font-black text-white whitespace-nowrap transform -rotate-12 select-none">
+                    REVIEW ONLY • {user.email || 'GUEST'}
+                  </div>
+               </div>
                
                {/* Current Marker */}
                {marker && (

@@ -21,21 +21,33 @@ const ServiceStatus = ({ type = 'database' }) => (
   </div>
 );
 
-// Composant Timer avec persistance Firestore
+// Composant Timer avec persistance forte (Crash-proof)
 const TimerBlock = ({ project, onUpdate }) => {
+  const localKey = `flow_timer_${project.id}`;
   const [isRunning, setIsRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(project.totalTime || 0);
+  const [elapsed, setElapsed] = useState(() => {
+    const saved = localStorage.getItem(localKey);
+    return saved ? parseInt(saved, 10) : (project.totalTime || 0);
+  });
 
   useEffect(() => {
     let interval;
     if (isRunning) {
-      interval = setInterval(() => setElapsed(prev => prev + 1), 1000);
+      interval = setInterval(() => {
+        setElapsed(prev => {
+          const newVal = prev + 1;
+          // Auto-save local toutes les 5 secondes
+          if (newVal % 5 === 0) localStorage.setItem(localKey, newVal.toString());
+          return newVal;
+        });
+      }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isRunning, localKey]);
 
   useEffect(() => {
     if (!isRunning && elapsed !== project.totalTime) {
+      localStorage.setItem(localKey, elapsed.toString());
       api.saveProject({ ...project, totalTime: elapsed }).catch(console.error);
     }
   }, [isRunning]);
@@ -44,6 +56,7 @@ const TimerBlock = ({ project, onUpdate }) => {
     if (confirm('Réinitialiser le chrono ?')) {
       setElapsed(0);
       setIsRunning(false);
+      localStorage.removeItem(localKey);
       await api.saveProject({ ...project, totalTime: 0 });
     }
   };
@@ -101,13 +114,23 @@ export default function Production({ user }) {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [form, setForm] = useState({
-    title: '', clientId: '', assigneeId: '', price: '', priority: 'NORMAL',
-    link_rushes: '', link_review: '', platform_fee_pct: 2,
-    subtaskInput: '', subtasks: getDefaultSubtasks(), notes: '',
-    deliveryDate: '',
-    briefing: '', style: 'Minimalist', referenceLinks: '' 
+  const [form, setForm] = useState(() => {
+    const saved = localStorage.getItem('flow_os_draft_prod');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error('Parse error', e); }
+    }
+    return {
+      title: '', clientId: '', assigneeId: '', price: '', priority: 'NORMAL',
+      link_rushes: '', link_review: '', platform_fee_pct: 2,
+      subtaskInput: '', subtasks: getDefaultSubtasks(), notes: '',
+      deliveryDate: '',
+      briefing: '', style: 'Minimalist', referenceLinks: '' 
+    };
   });
+
+  useEffect(() => {
+    localStorage.setItem('flow_os_draft_prod', JSON.stringify(form));
+  }, [form]);
 
   useEffect(() => {
     setLoading(true);
@@ -251,6 +274,7 @@ export default function Production({ user }) {
         deliveryDate: '',
         briefing: '', style: 'Minimalist', referenceLinks: ''
       });
+      localStorage.removeItem('flow_os_draft_prod');
     } catch (e) {
       alert('Erreur lors de la création du projet.');
     }

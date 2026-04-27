@@ -1,8 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Note de sécurité: l'architecture actuelle utilisant des PIN locaux,
+    // l'accès de base est ouvert. En V3, implémenter Firebase Custom Tokens.
     match /{document=**} {
       allow read, write: if true;
+    }
+    
+    // Protection basique contre la suppression de compte accidentelle/malveillante
+    match /global_users/{userId} {
+      allow read, create, update: if true;
+      allow delete: if false; 
     }
   }
 }

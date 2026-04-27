@@ -15,7 +15,21 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-// ─── Données vides (aucune donnée démo) ────────────────────────────────────────
+let currentStudioId = null;
+
+export const apiContext = {
+  setStudioId: (id) => { 
+    currentStudioId = id; 
+    console.log(`[DAL] Studio Context active: ${id}`);
+  },
+  getStudioId: () => currentStudioId
+};
+
+const getColPath = (colName) => {
+  if (['global_users'].includes(colName)) return colName;
+  if (!currentStudioId) return colName; // Fallback during boot sequence or unauthenticated
+  return `studios/${currentStudioId}/${colName}`;
+};
 const initialData = {
   settings: {
     studioName: 'MON STUDIO',
@@ -86,77 +100,71 @@ const deleteLocalItem = (colName, id) => {
 const isFirestoreAvailable = () => !!db;
 
 const firestoreGet = async (colName) => {
-  const snap = await getDocs(collection(db, colName));
+  if (!isFirestoreAvailable()) return [];
+  const snap = await getDocs(collection(db, getColPath(colName)));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 };
 
 const firestoreSet = async (colName, id, data) => {
-  await setDoc(doc(db, colName, id), data);
+  if (!isFirestoreAvailable()) return;
+  await setDoc(doc(db, getColPath(colName), id), data);
 };
 
 const firestoreDelete = async (colName, id) => {
-  await deleteDoc(doc(db, colName, id));
+  if (!isFirestoreAvailable()) return;
+  await deleteDoc(doc(db, getColPath(colName), id));
 };
 
-// ─── Unified Collection Access (Firestore + LS fallback) ─────────────────────
 export const getCollection = async (colName) => {
-  if (!isFirestoreAvailable()) {
-    console.info(`[DAL] Using LocalStorage for ${colName} (Firestore inactive)`);
-    return getLocalCollection(colName);
-  }
-  
   try {
-    // Timeout augmenté à 10s pour éviter les faux négatifs sur "cold starts"
-    const data = await Promise.race([
-      firestoreGet(colName),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
-    ]);
-    
-    console.info(`[DAL] Firestore synced: ${colName} (${data.length} items)`);
-    
-    // Sync vers LS pour offline
-    const lsdb = getLocalDB();
-    lsdb[colName] = data;
-    saveLocalDB(lsdb);
-    return data;
+    return await firestoreGet(colName);
   } catch (e) {
-    console.warn(`[DAL] Firestore [${colName}] fallback to LS:`, e.message);
-    return getLocalCollection(colName);
+    console.warn(`[DAL] Firebase Read failed for ${colName}:`, e);
+    return [];
   }
 };
 
 const setItem = async (colName, id, data) => {
-  // Toujours sauvegarder en local d'abord
-  saveLocalItem(colName, id, data);
-  // Puis syncer Firestore si dispo
-  if (isFirestoreAvailable()) {
-    firestoreSet(colName, id, data).catch(e =>
-      console.warn(`Firestore write [${colName}/${id}] failed:`, e.message)
-    );
+  try {
+    await firestoreSet(colName, id, data);
+  } catch (e) {
+    console.warn(`[DAL] Firebase Write failed for ${colName}/${id}:`, e);
   }
 };
 
 const deleteItem = async (colName, id) => {
-  deleteLocalItem(colName, id);
-  if (isFirestoreAvailable()) {
-    firestoreDelete(colName, id).catch(e =>
-      console.warn(`Firestore delete [${colName}/${id}] failed:`, e.message)
-    );
+  try {
+    await firestoreDelete(colName, id);
+  } catch (e) {
+    console.warn(`[DAL] Firebase Delete failed for ${colName}/${id}:`, e);
   }
 };
 
 const forceSetCollection = async (colName, data) => {
-  const lsdb = getLocalDB();
-  lsdb[colName] = data;
-  saveLocalDB(lsdb);
   if (isFirestoreAvailable()) {
-    // Note: Pour une collection complète, on devrait normalement faire un batch ou écraser les items un par un
-    // Ici on sync les items existants pour simplifier
     for (const item of data) {
        firestoreSet(colName, item.id, item).catch(() => {});
     }
   }
   window.dispatchEvent(new Event('flow-db-update'));
+};
+
+const registerGlobalUser = async (email, studioId) => {
+  if (isFirestoreAvailable()) {
+    const emailLow = email.toLowerCase().trim();
+    const docRef = doc(db, 'global_users', emailLow);
+    const snap = await getDoc(docRef);
+    
+    if (snap.exists()) {
+      const data = snap.data();
+      const studios = data.studios || [];
+      if (!studios.includes(studioId)) {
+        await updateDoc(docRef, { studios: [...studios, studioId] });
+      }
+    } else {
+      await setDoc(docRef, { email: emailLow, studios: [studioId] });
+    }
+  }
 };
 
 // ─── Logiques Métier ─────────────────────────────────────────────────────────
@@ -178,32 +186,23 @@ const createSubscription = (colName, callback, orderByField = null) => {
   if (isFirestoreAvailable()) {
     try {
       const q = orderByField
-        ? query(collection(db, colName), orderBy(orderByField, 'asc'))
-        : collection(db, colName);
+        ? query(collection(db, getColPath(colName)), orderBy(orderByField, 'asc'))
+        : collection(db, getColPath(colName));
         
       return onSnapshot(q,
         (snap) => {
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          const lsdb = getLocalDB();
-          lsdb[colName] = data;
-          saveLocalDB(lsdb);
           callback(data);
         },
         (err) => {
           console.error(`[DAL] Firestore onSnapshot Error [${colName}]:`, err.message);
-          // Fallback silencieux vers LS
-          callback(getLocalCollection(colName));
         }
       );
     } catch (e) {
       console.error(`[DAL] Subscription setup failed [${colName}]:`, e.message);
     }
   }
-  
-  // LS polling fallback (plus lent pour économiser CPU)
-  callback(getLocalCollection(colName));
-  const interval = setInterval(() => callback(getLocalCollection(colName)), 5000);
-  return () => clearInterval(interval);
+  return () => {}; // fallback if db is dead
 };
 
 // ─── Export API ───────────────────────────────────────────────────────────────
@@ -222,26 +221,21 @@ export const getDB = async () => {
     let settings = initialData.settings;
     if (isFirestoreAvailable()) {
       try {
-        const settingsDoc = await getDoc(doc(db, 'settings', 'main'));
+        const settingsDoc = await getDoc(doc(db, getColPath('settings'), 'main'));
         if (settingsDoc.exists()) {
           settings = settingsDoc.data();
-        } else {
-          console.info('[DAL] Settings missing in Firestore, initiating first seed...');
-          await seedInitialData();
+        } else if (currentStudioId) {
+          await firestoreSet('settings', 'main', initialData.settings);
         }
       } catch (e) {
         console.warn('[DAL] Settings read error:', e.message);
-        settings = getLocalDB().settings || initialData.settings;
       }
-    } else {
-      settings = getLocalDB().settings || initialData.settings;
     }
 
     return { projects, team, clients, archives, crmLeads, settings };
   } catch (e) {
     console.error('[DAL] Critical Boot Error:', e);
-    const ls = getLocalDB();
-    return { ...ls, settings: ls.settings || initialData.settings };
+    return { projects: [], team: [], clients: [], archives: [], crmLeads: [], settings: initialData.settings };
   }
 };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../lib/apiService';
+import { api, apiContext } from '../lib/apiService';
 import { Lock, ArrowLeft } from 'lucide-react';
 
 export default function PinLogin({ email, onLogin, onBack }) {
@@ -10,22 +10,28 @@ export default function PinLogin({ email, onLogin, onBack }) {
 
   useEffect(() => {
     setIsLoading(true);
-    Promise.all([api.getTeam(), api.getClients()]).then(([teamData, clientsData]) => {
-      const allUsers = [...teamData, ...clientsData];
-      const dbMatches = allUsers.filter(u => u.email.toLowerCase() === email.trim().toLowerCase());
+    api.getCollection('global_users').then(globalUsers => {
+      const gUser = globalUsers.find(u => u.email === email.trim().toLowerCase());
       
-      // Fallback Admin Master (Toujours disponible pour l'Admin via PIN 4444)
-      const fallbackAdmin = {
-        id: `ADMIN_${Date.now()}`,
-        name: email.split('@')[0],
-        email: email.trim().toLowerCase(),
-        role: 'admin',
-        pin: '4444'
+      const prepareTargetUsers = (studioId) => {
+        apiContext.setStudioId(studioId);
+        Promise.all([api.getTeam(), api.getClients()]).then(([teamData, clientsData]) => {
+          const allUsers = [...teamData, ...clientsData];
+          const dbMatches = allUsers.filter(u => u.email.toLowerCase() === email.trim().toLowerCase());
+          setTargetUser(dbMatches);
+        }).finally(() => {
+          setIsLoading(false);
+        });
       };
 
-      // On combine les profils Firestore avec le Master Admin par défaut
-      setTargetUser([fallbackAdmin, ...dbMatches]);
-    }).finally(() => {
+      if (gUser && gUser.studios && gUser.studios.length > 0) {
+        // Utilisateur trouvé dans au moins un studio
+        prepareTargetUsers(gUser.studios[0]);
+      } else {
+        // Fallback pour la compatibilité
+        prepareTargetUsers('default_studio');
+      }
+    }).catch(() => {
       setIsLoading(false);
     });
   }, [email]);
@@ -96,10 +102,6 @@ export default function PinLogin({ email, onLogin, onBack }) {
             Access System
           </button>
         </form>
-      </div>
-
-      <div className="fixed bottom-4 text-xs font-mono text-cyber-muted tracking-widest opacity-40 text-center">
-        Demo (Editor: 0000 | Admin: 4444 | Client: 1111)
       </div>
     </div>
   );

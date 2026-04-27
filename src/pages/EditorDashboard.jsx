@@ -140,6 +140,22 @@ export default function EditorDashboard({ user }) {
   const [timerActive, setTimerActive] = useState(false);
   const [seconds, setSeconds] = useState(0);
 
+  const formatTime = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const updateHandoff = async () => {
+    if (activeProject) {
+      const p = projects.find(it => it.id === activeProject);
+      if (p) {
+        await api.saveProject({ ...p, handoffNotes: handoff });
+      }
+    }
+  };
+
   useEffect(() => {
     let interval;
     if (timerActive) {
@@ -290,7 +306,7 @@ export default function EditorDashboard({ user }) {
                      </div>
                      <div className="flex flex-col items-end gap-2">
                         <button 
-                          onClick={() => timerActive ? stopTimer() : setTimerActive(true)}
+                          onClick={() => setTimerActive(!timerActive)}
                           className={`neon-button-primary !px-6 !py-3 flex items-center gap-3 group transition-all ${timerActive ? '!border-cyber-red !text-cyber-red' : ''}`}
                         >
                            {timerActive ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}

@@ -3,7 +3,7 @@ import { Mail, Compass } from 'lucide-react';
 import { loginWithGoogle, loginWithEmail } from '../lib/firebase';
 
 export default function EmailLogin({ onEmailValidated }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => localStorage.getItem('flow_os_last_email') || '');
   const [password, setPassword] = useState('password123'); // Preset for mock demonstration
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,6 +35,8 @@ export default function EmailLogin({ onEmailValidated }) {
     // On bypass l'authentification stricte de Firebase (mot de passe),
     // car la véritable identification est basée sur le PIN propre à l'email.
     // N'importe quel email généré par l'admin peut donc accéder à la phase 2.
+    localStorage.setItem('flow_os_last_email', email.trim().toLowerCase());
+    
     setTimeout(() => {
         onEmailValidated(email.trim().toLowerCase());
         setLoading(false);

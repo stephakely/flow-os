@@ -6,23 +6,29 @@ import {
   LogOut, ChevronRight
 } from 'lucide-react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
-import { getDB } from './lib/apiService';
+import { api, getDB, apiContext } from './lib/apiService';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import Dashboard from './pages/Dashboard';
-import Production from './pages/Production';
-import CRM from './pages/CRM';
-import Team from './pages/Team';
-import Archives from './pages/Archives';
-import Settings from './pages/Settings';
-import PinLogin from './pages/PinLogin';
-import EmailLogin from './pages/EmailLogin';
-import EditorDashboard from './pages/EditorDashboard';
-import ClientDashboard from './pages/ClientDashboard';
-import AccessControl from './pages/AccessControl';
-import Devis from './pages/Devis';
-import Finances from './pages/Finances';
-import Planning from './pages/Planning';
+import { Suspense, lazy } from 'react';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Production = lazy(() => import('./pages/Production'));
+const CRM = lazy(() => import('./pages/CRM'));
+const Team = lazy(() => import('./pages/Team'));
+const Archives = lazy(() => import('./pages/Archives'));
+const Settings = lazy(() => import('./pages/Settings'));
+const PinLogin = lazy(() => import('./pages/PinLogin'));
+const EmailLogin = lazy(() => import('./pages/EmailLogin'));
+const EditorDashboard = lazy(() => import('./pages/EditorDashboard'));
+const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
+const AccessControl = lazy(() => import('./pages/AccessControl'));
+const Devis = lazy(() => import('./pages/Devis'));
+const Finances = lazy(() => import('./pages/Finances'));
+const Planning = lazy(() => import('./pages/Planning'));
+const JoinStudio = lazy(() => import('./pages/JoinStudio'));
+const TaskBoard = lazy(() => import('./pages/TaskBoard'));
+const GearTracker = lazy(() => import('./pages/GearTracker'));
+
 import { ErrorBoundary } from './components/ErrorBoundary';
 import MessengerWidget from './components/MessengerWidget';
 
@@ -38,8 +44,10 @@ const ALL_LINKS = [
   { name: 'Archives', icon: BookOpen, path: '/app/archives', roles: ['admin'] },
   { name: 'Accès & Sécu.', icon: Shield, path: '/app/access', roles: ['admin'] },
   { name: 'Paramètres', icon: SettingsIcon, path: '/app/settings', roles: ['admin'] },
+  { name: 'Matériel', icon: SettingsIcon, path: '/app/gear', roles: ['admin'] }, // Replace with a better icon if possible, but SettingsIcon is fine
   // Editor
   { name: 'Mon Espace', icon: LayoutDashboard, path: '/app', roles: ['editor'], exact: true },
+  { name: 'Kanban', icon: Briefcase, path: '/app/kanban', roles: ['editor', 'admin'] },
   { name: 'Planning', icon: Calendar, path: '/app/planning', roles: ['editor'] },
   // Client
   { name: 'Mes Projets', icon: LayoutDashboard, path: '/app', roles: ['client'], exact: true },
@@ -162,19 +170,33 @@ const AppLayout = ({ user, onLogout }) => {
             transition={{ duration: 0.25 }}
             className="min-h-full"
           >
-            <Routes location={location} key={location.pathname}>
-              <Route index element={<RoleBasedIndex user={user} />} />
-              <Route path="/production" element={<Production user={user} />} />
-              <Route path="/crm" element={<CRM user={user} />} />
-              <Route path="/devis" element={<Devis user={user} />} />
-              <Route path="/finances" element={<Finances user={user} />} />
-              <Route path="/planning" element={<Planning user={user} />} />
-              <Route path="/team" element={<Team user={user} />} />
-              <Route path="/access" element={<AccessControl user={user} />} />
-              <Route path="/archives" element={<Archives user={user} />} />
-              <Route path="/settings" element={<Settings user={user} />} />
-              <Route path="*" element={<Navigate to="/app" replace />} />
-            </Routes>
+            <Suspense fallback={
+              <div className="h-full min-h-[50vh] flex flex-col items-center justify-center font-mono">
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="text-cyber-neon/50 text-sm font-black tracking-[0.4em]"
+                >
+                  LOADING MODULE...
+                </motion.div>
+              </div>
+            }>
+              <Routes location={location} key={location.pathname}>
+                <Route index element={<RoleBasedIndex user={user} />} />
+                <Route path="/production" element={<Production user={user} />} />
+                <Route path="/crm" element={<CRM user={user} />} />
+                <Route path="/devis" element={<Devis user={user} />} />
+                <Route path="/finances" element={<Finances user={user} />} />
+                <Route path="/planning" element={<Planning user={user} />} />
+                <Route path="/team" element={<Team user={user} />} />
+                <Route path="/access" element={<AccessControl user={user} />} />
+                <Route path="/archives" element={<Archives user={user} />} />
+                <Route path="/settings" element={<Settings user={user} />} />
+                <Route path="/gear" element={<GearTracker user={user} />} />
+                <Route path="/kanban" element={<TaskBoard user={user} />} />
+                <Route path="*" element={<Navigate to="/app" replace />} />
+              </Routes>
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>
@@ -270,19 +292,67 @@ export default function App() {
     // BOOT INSTANTANÉ - localStorage only
     try {
       const savedUser = localStorage.getItem('flow_os_user');
-      if (savedUser) setUser(JSON.parse(savedUser));
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        
+        // SESSION TIMEOUT LOGIC
+        const lastActivity = localStorage.getItem('flow_os_last_activity') || Date.now();
+        const now = Date.now();
+        const hoursInactive = (now - parseInt(lastActivity, 10)) / (1000 * 60 * 60);
+
+        const timeoutLimit = parsed.role === 'client' ? 24 : (24 * 7); // 24h client, 7 days staff
+
+        if (hoursInactive > timeoutLimit) {
+          alert('Session expirée pour des raisons de sécurité.');
+          localStorage.removeItem('flow_os_user');
+          setUser(null);
+        } else {
+          apiContext.setStudioId(parsed.studioId || 'default_studio');
+          setUser(parsed);
+          localStorage.setItem('flow_os_last_activity', now.toString()); // Refresh
+        }
+      }
     } catch (e) {
       localStorage.removeItem('flow_os_user');
     }
 
-    // Vérifier si c'est le premier lancement (aucun compte admin)
-    const lsdb = JSON.parse(localStorage.getItem('flow_os_db_v2') || '{}');
-    const hasAdmin = (lsdb.team || []).some(m => m.role === 'admin');
-    if (!hasAdmin) setIsFirstLaunch(true);
+    // Activity tracking loop (update every 5 minutes while open)
+    const interval = setInterval(() => {
+      localStorage.setItem('flow_os_last_activity', Date.now().toString());
+    }, 5 * 60 * 1000);
+
+    // Track user active actions
+    const handleUserActivity = () => {
+      localStorage.setItem('flow_os_last_activity', Date.now().toString());
+    };
+    window.addEventListener('mousemove', handleUserActivity, { passive: true });
+    window.addEventListener('keydown', handleUserActivity, { passive: true });
+
+    // Vérifier si c'est le premier lancement (aucun compte global)
+    // On ne déclenche setIsFirstLaunch que si global_users est explicitement vide.
+    api.getCollection('global_users').then(globalUsers => {
+       const hasAnyUser = globalUsers && globalUsers.length > 0;
+       
+       // Si on est sur une route publique comme /join, on ne force pas le First Launch
+       const isPublicRoute = window.location.pathname.includes('/join');
+       
+       if (!hasAnyUser && !isPublicRoute) {
+         setIsFirstLaunch(true);
+       }
+    }).catch(err => {
+      console.error('[BOOT] Erreur lors de la vérification du premier lancement:', err);
+    }).finally(() => {
+      setLoading(false);
+    });
 
     // Firestore sync en arrière-plan
-    getDB().catch(console.error);
-    setLoading(false);
+    api.getDB().catch(console.error);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+    };
   }, []);
 
   const handleFirstLaunchSetup = async (data) => {
@@ -296,23 +366,38 @@ export default function App() {
       email: adminEmail.trim().toLowerCase(),
       pin: adminPin,
       role: 'admin',
+      studioId: `studio_${Date.now()}`,
       totalEarned: 0,
       createdAt: new Date().toISOString()
     };
-
-    if (!lsdb.team) lsdb.team = [];
-    lsdb.team.push(adminUser);
-    if (!lsdb.settings) lsdb.settings = {};
-    lsdb.settings.studioName = studioName;
-    lsdb.settings.studioEmail = adminEmail;
-    localStorage.setItem('flow_os_db_v2', JSON.stringify(lsdb));
+    
+    // Create the global user entry
+    apiContext.setStudioId(adminUser.studioId);
+    api.forceSetCollection('global_users', [{ email: adminUser.email, studios: [adminUser.studioId] }]);
+    // Add to specific studio team
+    api.updateTeam(adminUser);
+    api.updateSettings({ studioName, studioEmail: adminEmail, currency: 'EUR' });
 
     setIsFirstLaunch(false);
     handleLogin(adminUser);
   };
 
   const handleLogin = (userObj) => {
+    // Si l'utilisateur n'a pas de studio_id (anciens comptes), on lui assigne le default
+    if (!userObj.studioId) userObj.studioId = 'default_studio';
+
+    apiContext.setStudioId(userObj.studioId);
     localStorage.setItem('flow_os_user', JSON.stringify(userObj));
+    localStorage.setItem('flow_os_last_activity', Date.now().toString());
+    
+    // Welcome Back Toast mechanism
+    api.logActivity({
+      action: 'LOGIN',
+      userId: userObj.id,
+      userName: userObj.name,
+      role: userObj.role
+    }).catch(() => {});
+    
     setUser(userObj);
   };
 
@@ -334,8 +419,8 @@ export default function App() {
     </div>
   );
 
-  // Premier lancement sans admin
-  if (isFirstLaunch && !user) {
+  // Premier lancement sans admin (Sauf si on est en train de rejoindre un studio sur invitation)
+  if (isFirstLaunch && !user && !window.location.pathname.includes('/join')) {
     return (
       <ThemeProvider>
         <ErrorBoundary>
@@ -349,21 +434,34 @@ export default function App() {
     <ThemeProvider>
       <ErrorBoundary>
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={
-              !user ? (
-                !verifiedEmail ? (
-                  <EmailLogin onEmailValidated={setVerifiedEmail} />
+          <Suspense fallback={
+            <div className="h-screen bg-cyber-dark flex flex-col items-center justify-center font-mono">
+              <motion.div
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className="text-cyber-neon text-3xl font-black tracking-[0.4em]"
+              >
+                FLOW_OS
+              </motion.div>
+            </div>
+          }>
+            <Routes>
+              <Route path="/join" element={!user ? <JoinStudio onLogin={handleLogin} /> : <Navigate to="/app" />} />
+              <Route path="/login" element={
+                !user ? (
+                  !verifiedEmail ? (
+                    <EmailLogin onEmailValidated={setVerifiedEmail} />
+                  ) : (
+                    <PinLogin email={verifiedEmail} onLogin={handleLogin} onBack={() => setVerifiedEmail(null)} />
+                  )
                 ) : (
-                  <PinLogin email={verifiedEmail} onLogin={handleLogin} onBack={() => setVerifiedEmail(null)} />
+                  <Navigate to="/app" />
                 )
-              ) : (
-                <Navigate to="/app" />
-              )
-            } />
-            <Route path="/app/*" element={user ? <AppLayout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
-            <Route path="*" element={<Navigate to={user ? '/app' : '/login'} />} />
-          </Routes>
+              } />
+              <Route path="/app/*" element={user ? <AppLayout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
+              <Route path="*" element={<Navigate to={user ? '/app' : '/login'} />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </ErrorBoundary>
     </ThemeProvider>
