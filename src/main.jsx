@@ -5,6 +5,16 @@ import './index.css'
 
 console.log('[DEBUG] main.jsx started');
 
+// Sécurité : Désinstaller tout Service Worker résiduel qui pourrait corrompre le routing
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    for (const registration of registrations) {
+      registration.unregister();
+      console.log('[DEBUG] Service Worker unmounted');
+    }
+  });
+}
+
 try {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
