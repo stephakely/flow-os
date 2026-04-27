@@ -411,17 +411,11 @@ export default function App() {
   if (loading) {
     console.log('[DEBUG] App state: LOADING');
     return (
-      <div className="h-screen bg-cyber-dark flex flex-col items-center justify-center font-mono">
-        <h1 style={{ color: 'white', zIndex: 9999 }}>DEBUG: LOADING...</h1>
-      <motion.div
-        animate={{ scale: [1, 1.05, 1] }}
-        transition={{ duration: 1.5, repeat: Infinity }}
-        className="text-cyber-neon text-3xl font-black tracking-[0.4em]"
-      >
-        FLOW_OS
-      </motion.div>
-    </div>
-  );
+      <div className="h-screen bg-black flex flex-col items-center justify-center font-mono">
+        <h1 style={{ color: '#00FFAA', fontSize: '2rem' }}>FLOW_OS DEBUG LOADING...</h1>
+      </div>
+    );
+  }
 
   // Premier lancement sans admin (Sauf si on est en train de rejoindre un studio sur invitation)
   if (isFirstLaunch && !user && !window.location.pathname.includes('/join')) {
