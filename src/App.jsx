@@ -181,13 +181,23 @@ export default function App() {
       setUser(parsed);
     }
 
+    // Sécurité : Timeout de chargement pour éviter l'écran noir si Firebase bloque
+    const safetyTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 3000);
+
     api.getCollection('global_users').then(globalUsers => {
        if (!globalUsers || globalUsers.length === 0) {
          if (!window.location.pathname.includes('/join')) setIsFirstLaunch(true);
        }
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch(console.error).finally(() => {
+      clearTimeout(safetyTimeout);
+      setLoading(false);
+    });
 
     api.getDB().catch(console.error);
+
+    return () => clearTimeout(safetyTimeout);
   }, []);
 
   const handleLogin = (userObj) => {
