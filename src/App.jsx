@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { api, getDB, apiContext } from './lib/apiService';
-import { motion, AnimatePresence } from 'framer-motion';
+// Temporarily disabled motion to debug black screen
+// import { motion, AnimatePresence } from 'framer-motion';
+const motion = { div: 'div', p: 'p', span: 'span' }; // Mock to avoid breaks
 
 import Dashboard from './pages/Dashboard';
 import Production from './pages/Production';
@@ -408,63 +410,38 @@ export default function App() {
     setVerifiedEmail(null);
   };
 
-  if (loading) {
-    console.log('[DEBUG] App state: LOADING');
-    return (
-      <div className="h-screen bg-black flex flex-col items-center justify-center font-mono">
-        <h1 style={{ color: '#00FFAA', fontSize: '2rem' }}>FLOW_OS DEBUG LOADING...</h1>
-      </div>
-    );
-  }
-
-  // Premier lancement sans admin (Sauf si on est en train de rejoindre un studio sur invitation)
-  if (isFirstLaunch && !user && !window.location.pathname.includes('/join')) {
-    console.log('[DEBUG] App state: FIRST_LAUNCH');
-    return (
-      <ThemeProvider>
-        <ErrorBoundary>
-          <FirstLaunchScreen onSetup={handleFirstLaunchSetup} />
-        </ErrorBoundary>
-      </ThemeProvider>
-    );
-  }
-
-  console.log('[DEBUG] App state: MAIN_ROUTER', { user: !!user });
-
   return (
-    <ThemeProvider>
-      <ErrorBoundary>
-        <BrowserRouter>
-          <Suspense fallback={
-            <div className="h-screen bg-cyber-dark flex flex-col items-center justify-center font-mono">
-              <motion.div
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="text-cyber-neon text-3xl font-black tracking-[0.4em]"
-              >
-                FLOW_OS
-              </motion.div>
-            </div>
-          }>
-            <Routes>
-              <Route path="/join" element={!user ? <JoinStudio onLogin={handleLogin} /> : <Navigate to="/app" />} />
-              <Route path="/login" element={
-                !user ? (
-                  !verifiedEmail ? (
-                    <EmailLogin onEmailValidated={setVerifiedEmail} />
+    <ErrorBoundary>
+      <ThemeProvider>
+        {loading ? (
+          <div className="h-screen bg-black flex flex-col items-center justify-center font-mono">
+            <h1 style={{ color: '#00FFAA', fontSize: '2rem' }}>FLOW_OS LOADING...</h1>
+          </div>
+        ) : isFirstLaunch && !user && !window.location.pathname.includes('/join') ? (
+          <FirstLaunchScreen onSetup={handleFirstLaunchSetup} />
+        ) : (
+          <BrowserRouter>
+            <Suspense fallback={<div>Loading router...</div>}>
+              <Routes>
+                <Route path="/join" element={!user ? <JoinStudio onLogin={handleLogin} /> : <Navigate to="/app" />} />
+                <Route path="/login" element={
+                  !user ? (
+                    !verifiedEmail ? (
+                      <EmailLogin onEmailValidated={setVerifiedEmail} />
+                    ) : (
+                      <PinLogin email={verifiedEmail} onLogin={handleLogin} onBack={() => setVerifiedEmail(null)} />
+                    )
                   ) : (
-                    <PinLogin email={verifiedEmail} onLogin={handleLogin} onBack={() => setVerifiedEmail(null)} />
+                    <Navigate to="/app" />
                   )
-                ) : (
-                  <Navigate to="/app" />
-                )
-              } />
-              <Route path="/app/*" element={user ? <AppLayout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
-              <Route path="*" element={<Navigate to={user ? '/app' : '/login'} />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </ErrorBoundary>
-    </ThemeProvider>
+                } />
+                <Route path="/app/*" element={user ? <AppLayout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
+                <Route path="*" element={<Navigate to={user ? '/app' : '/login'} />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        )}
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
